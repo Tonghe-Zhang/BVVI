@@ -9,7 +9,6 @@ import yaml
 from POMDP_model import get_random_dist, sample_from
 
 def test_MC_1D():
-
     num_samples=1000
 
     size_of_space=10
@@ -42,6 +41,7 @@ def test_MC_1D():
         plt.ylabel(r'$\| \widehat{p}-p \|_2$')
         plt.show()
 
+
 from POMDP_model import initialize_model, initialize_policy, sample_trajectory
 
 def test_MC_high_dimensional():
@@ -59,31 +59,33 @@ def test_MC_high_dimensional():
     iota =np.log(K*H*nS*nO*nA/delta)
     reward=torch.tensor([H,nS,nA])
 
-    num_iter=1000
 
+    # start the algorithm
+    num_iter=K
+
+    # obtain the true environment. invisible for the agent. Immutable. Only used during sampling.
     model_true=initialize_model(nS,nO,nA,H,init_type='random')
-
-    model_empirical=initialize_model(nS,nO,nA,H,init_type='uniform')
-
-    mu_hat, T_hat, O_hat=model_empirical
     mu,T,O=model_true
 
+    # Initialize the empiricl kernels with uniform distributions.
+    mu_hat, T_hat, O_hat=initialize_model(nS,nO,nA,H,init_type='uniform')
+    
     policy=initialize_policy(nO,nA,H)
 
-    Ns=torch.zeros([nS])
+    # (s,o,a) occurrence counters
+    Ns=torch.zeros([nS])           # frequency of s0
     Nos=torch.zeros([H,nO,nS])     # frequency of o  given s
     Nssa=torch.zeros([H,nS,nS,nA]) # frequency of s' given (s,a)
-
-    Nos_ones=torch.ones([1,nS])
-    Nssa_ones=torch.ones([1,nS,nA])
-    
+    Nos_ones=torch.ones([1,nS])    # matrix of 1 of size N(s)
+    Nssa_ones=torch.ones([1,nS,nA])# matrix of 1 of size N(s,a) 
     # errors after each iteration.
     mu_err=np.zeros([num_iter])
     T_err=np.zeros([num_iter])
     O_err=np.zeros([num_iter])
+
     # start to learn the dynamics.
     for k in range(num_iter):
-        traj=sample_trajectory(H,policy,model_true)
+        traj=sample_trajectory(H,policy,model=(mu,T,O))
         # update s0 count
         s0=traj[0][0]
         Ns[s0]+=1
@@ -109,7 +111,6 @@ def test_MC_high_dimensional():
         for s in range(nS):
             for a in range(nA):
                 T_hat[H-1][:,s,a]=torch.eye(nS)[0]
-            
         # compute the average Frobenius error until this iter.
         mu_err[k]=torch.linalg.norm(mu-mu_hat)/mu.numel()
         T_err[k]=torch.linalg.norm(T-T_hat)/T.numel()
@@ -130,13 +131,16 @@ def log_output(mu_err,T_err,O_err, H:int)->None:
         loss_curve=np.loadtxt('log.txt')
         print(f"read in {loss_curve.shape[0]} items from File:{'log.txt'}" )
         indices=np.arange(loss_curve.shape[0])*H
-        labels_plt=['Initial distribution $\mu(\cdot)$','transition matrices $\{\mathbb{T}_h(\cdot|s,a)\}_{h=1}^{H}$','emission matrices $\{\mathbb{O}_h(\cdot|s)\}_{h}^{H}$']
+        labels_plt=['Initial distribution $\mu(\cdot)$',\
+                    'Transition matrices $\{\mathbb{T}_h(\cdot|s,a)\}_{h=1}^{H}$',\
+                        'Emission matrices $\{\mathbb{O}_h(\cdot|s)\}_{h}^{H}$']
         for id in range(3):
-            plt.plot(indices,loss_curve[:,id],label=labels_plt[id])
+            plt.plot((indices),loss_curve[:,id],label=labels_plt[id])
         plt.title(f'Average 2-norm Error of Monte-Carlo Simulation. Horizon H={H}')
         plt.xlabel(f'Samples N (=iteration $k$ * {H})')
         plt.ylabel(r'$\frac{1}{d} \| \widehat{p}^k(\cdot)-p(\cdot) \|_2$')
         plt.legend(loc='upper right', labels=labels_plt)
+        plt.savefig('plots/Monte-Carlo-Estimation-Error.jpg')
         plt.show()
 
 test_MC_high_dimensional()
