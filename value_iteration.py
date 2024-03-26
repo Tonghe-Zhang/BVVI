@@ -3,6 +3,7 @@ import numpy as np
 import pandas
 import torch.nn.functional as F
 import yaml 
+import itertools
 
 # load the RL platform
 from POMDP_model import initialize_model, initialize_policy, sample_trajectory
@@ -62,17 +63,24 @@ for h in range(H):
                 ff=f+(a,)+(o,)
                 # assign value to each g[(f,a,o)]=G(g_1(a,o), g_2(f))
 
-nA=2
-nO=4
-H=5
-
-obs_space=tuple(list(np.arange(nO)))
-act_space=tuple(list(np.arange(nA)))
-
-his_space=[ obs_space if i%2==0 else act_space for i in range(H)]
-
-all_tuples=list(itertools.product(*his_space))
-
 '''
 
 
+
+def his_iter():
+    nA=2
+    nO=4
+    H=3
+
+    obs_space=tuple(list(np.arange(nO)))
+    act_space=tuple(list(np.arange(nA)))
+    his_space=[None for _ in range(H)]
+    for h in range(H):
+        # Create the space of \mathcal{F}_h = (\mathcal{O}\times \mathcal{A})^{h-1}\times \mathcal{O}
+        his_space[h]=[ obs_space if i%2==0 else act_space for i in range(2*(h))]+[obs_space]
+
+        all_coordinates=list(itertools.product(*his_space[h]))
+        print(f"At h={h}: possible coordinates are")
+        for coord in all_coordinates:
+            print(f"\t\t{coord}")
+his_iter()
