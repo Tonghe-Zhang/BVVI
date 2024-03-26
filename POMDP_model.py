@@ -35,7 +35,7 @@ def sample_from(dist)->int:
     return int(np.random.choice(a=list(np.arange(len(dist))), size=1, p=dist))
 
 
-def initialize_model(nS:int,nO:int,nA:int,init_type:str)->tuple:
+def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
 
     '''
     inputs
@@ -69,8 +69,7 @@ def initialize_model(nS:int,nO:int,nA:int,init_type:str)->tuple:
     initialization: random distribution. 
     '''
     #emit_kernel=torch.transpose(torch.tensor([[get_random_dist(nO) for _ in range(nS)] for _ in range(horizon)]),1,2)
-    emit_kernel=torch.transpose(torch.tensor(np.array([np.array([get_random_dist(dim=nO,dist_type=init_type) for _ in range(nS)])for _ in range(H)])),1,2)
-
+    emit_kernel=torch.transpose(torch.tensor(np.array([np.array([get_random_dist(dim=nO,dist_type=init_type) for _ in range(nS)])for _ in range(horizon)])),1,2)
 
     '''
     transition matrices
@@ -78,13 +77,16 @@ def initialize_model(nS:int,nO:int,nA:int,init_type:str)->tuple:
     shape: torch.Size([horizon,nS,nS,nA])
     access: trans_kernel[h][:,s,a] is the distribution of \mathbb{T}_{h}(\cdot|s,a) \in \Delta(\mathcal{S})
     normalization: sum(trans_kernel[h][:,s,a])=tensor(1.0000, dtype=torch.float64)
-    initialization: random distribution. 
+    initialization: random distribution.
+    notice: we will not collect s_{H+1}, but set T_{H}(\cdot|sH,aH) as \delta(s_{H+1}-0), i.e. the H+1-th state is an absorbing state 0.
     '''
     #trans_kernel=torch.transpose(torch.tensor( [ [ [get_random_dist(dim=nS) for s in range(10)] for a in range(20) ] for h in range(30) ]  ),1,3)
-    trans_kernel=torch.transpose(torch.tensor( np.array([ np.array([ np.array([get_random_dist(dim=nS,dist_type=init_type) for s in range(10)]) for a in range(20) ]) for h in range(30) ])  ),1,3)
-
+    trans_kernel=torch.transpose(torch.tensor( np.array([ np.array([ np.array([get_random_dist(dim=nS,dist_type=init_type) for s in range(nS)]) for a in range(nA) ]) for h in range(horizon) ])  ),1,3)
+    # The last state H+1 is an absorbing state to state 0. It will not be sampled.
+    for s in range(nS):
+        for a in range(nA):
+            trans_kernel[horizon-1][:,s,a]=torch.eye(nS)[0]
     return (init_dist,trans_kernel,emit_kernel)
-
 
 
 def sample_trajectory(horizon:int,policy,model):
@@ -193,7 +195,7 @@ def show_trajectory(traj):
     print(f"action={traj[2]}")
 
 def test_sampling():
-    model=initialize_model(nS,nO,nA,init_type='uniform')
+    model=initialize_model(nS,nO,nA,H,init_type='uniform')
     
     policy=initialize_policy(nO,nA,H)
 

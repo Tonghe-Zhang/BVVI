@@ -22,7 +22,7 @@ iota =np.log(K*H*nS*nO*nA/delta)
 reward=torch.tensor([H,nS,nA])
 
 # the annotated line numbers correspond to the lines on page 22 of the original paper. 
-model_true=initialize_model(nS,nO,nA,init_type='random')
+model_true=initialize_model(nS,nO,nA,H,init_type='random')
 
 
 
@@ -30,7 +30,7 @@ model_true=initialize_model(nS,nO,nA,init_type='random')
 
 
 
-model_empirical=initialize_model(nS,nO,nA,init_type='uniform')
+model_empirical=initialize_model(nS,nO,nA,H,init_type='uniform')
 
 mu_hat, T_hat, O_hat=model_empirical
 
