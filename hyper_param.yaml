@@ -1,13 +1,8 @@
-
-
-
-
-
 sizes:
   size_of_action_space: 2
   size_of_state_space: 3
   size_of_observation_space: 4
   horizon_len: 5
-  num_episode: 2000
+  num_episode: 50       
   confidence_level: 0.1
   discount_factor: 0.8

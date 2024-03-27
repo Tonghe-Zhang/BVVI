@@ -37,7 +37,6 @@ mu_hat, T_hat, O_hat=initialize_model(nS,nO,nA,H,init_type='uniform')
 
 policy=initialize_policy(nO,nA,H)
 
-
 ################################################################
 ##### borrowed from test_monte_carlo.py file####################
 Nsa=torch.ones([H,nS,nA])

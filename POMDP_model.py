@@ -54,10 +54,11 @@ def initialize_reward(nS:int, nA:int, H:int, init_type:str)->torch.Tensor:
         reward=torch.zeros([H,nS,nA])
         for h in range(H):
             reward[h]=torch.rand([nS,nA])
-            return reward
+        return reward
     elif init_type=='ergodic':
         reward_layer=torch.rand([nS,nA]).unsqueeze(0)
         reward = reward_layer.repeat(H,1,1)
+        return reward
     else:
         raise(NotImplementedError)
 
@@ -79,7 +80,6 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
     remark
         The distributions are initialized as a randomly picked distribution, with the only constraint is that the distribution add up to 1.00
     '''
-
 
     '''
     initial distribution
@@ -116,26 +116,38 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
     
     return (init_dist.to(torch.float64),trans_kernel.to(torch.float64),emit_kernel.to(torch.float64))
 
-
-def sample_trajectory(horizon:int,policy,model):
+def sample_trajectory(horizon:int, policy, model, reward, output_reward=False):
     '''
-    sample a trajectory from a policy and a POMDP model with given horizon length.
-    return a 3x(H+1) integer list 'full_traj' of the form: 
-
-     s0 s1 s2 ... sH   sh=full_traj[0][h]
-     o0 o1 o2 ... oH   oh=full_traj[1][h]
-     a0 a1 a2 ... -1    ah=full_traj[2][h]  
+    inputs:
+        horizo length "horizon"
+        policy list "policy"
+        probabiliy kernels of the environment "model"
+        whether this sampler returns the rewards at each step: record_reward
+    returns:
+        1. only when "output_reward" is false:
+            a 3x(H+1) integer list 'full_traj' of the form: 
+            s0 s1 s2 ... sH    sh=full_traj[0][h]
+            o0 o1 o2 ... oH    oh=full_traj[1][h]
+            a0 a1 a2 ... -1    ah=full_traj[2][h]  
+        2. only when "output_reward" is true:
+            a (H)-shape np.float64 list, named 'sampled_reward'
+            r0 r1 ...rH-1      rh=full_traj[3][h]  
+    description:
+        sample a trajectory from a policy and a POMDP model with given horizon length.
+        we will not sample the last action which is in fact out of horizon. AH+1 or a[H] will be denoted as -1.
     '''
 
-    init_dist, trans_kernel, emit_kernel =model
-    
-    # integer list of size 3x(H+1)   we will not sample the last action which is in fact out of horizon. AH+1 or a[H] will be denoted as -1.
+    init_dist, trans_kernel, emit_kernel =model 
+
     full_traj=np.ones((3,horizon+1), dtype=int)*(-1)   
+    if output_reward:
+        sampled_reward=np.ones(horizon, dtype=np.float64)*(-1)
 
     # S_0
     full_traj[0][0]=sample_from(init_dist)
     # A single step of interactions
     for h in range(horizon+1):
+        # S_h
         state=full_traj[0][h]
         # O_h \sim \mathbb{O}_h(\cdot|s_h)
         observation=sample_from(emit_kernel[h][:,state])
@@ -144,13 +156,20 @@ def sample_trajectory(horizon:int,policy,model):
         if h<horizon:
             action=action_from_policy(full_traj[1:3,:],h,policy)
             full_traj[2][h]=action
-        # S_h \sim \mathbb{T}_{h}(\cdot|s_{h},a_{h})
-        if h<horizon:
+            # R_h = r_h(s_h,a_h)
+            if output_reward:
+                sampled_reward[h]=reward[h][state][action]
+                # print(f"sample a reward of {sampled_reward[h]} at (h,s,a)={h,state,action}")
+        # S_h+1 \sim \mathbb{T}_{h}(\cdot|s_{h},a_{h})
+        if h<horizon:  #do not record s_{H+1}
             new_state=sample_from(trans_kernel[h][:,state,action])
-        # do not record s_{H+1}
-        if h <horizon:
             full_traj[0][h+1]=new_state
+
+    if output_reward:
+        return sampled_reward
     return full_traj
+
+
 
 def initialize_policy(nO:int,nA:int,H:int):
     '''
@@ -205,6 +224,7 @@ def initialize_policy(nO:int,nA:int,H:int):
         policy[h]=(torch.ones([nO if i%2==0 else nA for i in range(2*h)]+[nO] +[nA])*(1/nA)).to(torch.float64)
     return policy
 
+
 def action_from_policy(raw_history:tuple,h:int,policy)->int:
     '''
     sample an action from policy_table at step h, with previous observable history indicated by a tuple 'history'.
@@ -221,6 +241,8 @@ def action_from_policy(raw_history:tuple,h:int,policy)->int:
     # retrieve \pi_h(\cdot|f_h)   policy[h][history] .shape=torch.Size([nA])
     action_distribution=policy[h][history] 
 
+    print(f"h={h}, action_distribution={action_distribution}, shape={action_distribution.shape}")
+
     # a_h \sim \pi_h(\cdot|f_h)
     action = sample_from(action_distribution)
     return action
@@ -230,22 +252,36 @@ a=A.mean(-1,keepdim=True)
 c=a.expand((-1,)*2+(3,))
 '''
 
-def show_trajectory(traj):
-    hor=len(traj[0])
-    print(f"sampled a full trajectory with horizon length={hor}.")
-    print(f"horizn={np.array([i+1 for i in range(hor)])}")
-    print(f"states={traj[0]}")
-    print(f"obsers={traj[1]}")
-    print(f"action={traj[2]}")
+def show_trajectory(*args,record_reward=False):
+    if record_reward:
+        _, rewards=args
+        print(f"rewards at the first H steps:")
+        print(f"reward={rewards}")
+    else:
+        traj=args
+        hor=len(traj[0])-1
+        print(f"sampled a full trajectory with horizon length={hor}. We did not record the action and rewards at H+1-th step.")
+        print(f"horizn={np.array([i+1 for i in range(hor)])}")
+        print(f"states={traj[0]}")
+        print(f"obsers={traj[1]}")
+        print(f"action={traj[2]}")
+
 
 def test_sampling():
     model=initialize_model(nS,nO,nA,H,init_type='uniform')
     
     policy=initialize_policy(nO,nA,H)
 
-    traj=sample_trajectory(H,policy,model)
+    reward=initialize_reward(nS,nA,H,"random")
     
-    show_trajectory(traj)
+    with_reward=True  # will also record the rewards obtained during the interaction.
+
+    if with_reward:
+        rewards=sample_trajectory(H,policy,model,reward,output_reward=with_reward)
+        show_trajectory(None, rewards, record_reward=with_reward)
+    else:
+        traj=sample_trajectory(H,policy,model,reward,output_reward=with_reward)
+        show_trajectory(traj, record_reward=with_reward)
 
 def test_policy():
     '''
@@ -263,6 +299,6 @@ def test_policy():
     for h in range(H):
         print(f"@ h={h}, policy[{h}].shape={policy[h].shape}")
 
-test_sampling()
+# test_sampling()
 
-test_policy()
+# test_policy()
