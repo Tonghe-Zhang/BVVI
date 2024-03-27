@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import yaml 
 
 # load the RL platform
-from POMDP_model import initialize_model, initialize_policy, sample_trajectory
+from POMDP_model import initialize_model, initialize_policy, initialize_reward, sample_trajectory
 
 # load hyper parameters from a yaml file.
 with open("hyper_param.yaml", 'r') as file:
@@ -19,7 +19,7 @@ nF=pow((nO*nA),H) #size_of_history_space
 delta=hyper_param['sizes']['confidence_level']
 gamma=hyper_param['sizes']['discount_factor']
 iota =np.log(K*H*nS*nO*nA/delta)
-reward=torch.tensor([H,nS,nA])
+reward=initialize_reward(nS,nA,H,'random')
 
 # the annotated line numbers correspond to the lines on page 22 of the original paper. 
 model_true=initialize_model(nS,nO,nA,H,init_type='random')

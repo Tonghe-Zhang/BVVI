@@ -34,9 +34,35 @@ def sample_from(dist)->int:
     '''
     return int(np.random.choice(a=list(np.arange(len(dist))), size=1, p=dist))
 
+def initialize_reward(nS:int, nA:int, H:int, init_type:str)->torch.Tensor:
+    '''
+    inputs:
+        sizes of the (s,a) spaces, horizon length H, and initiazation type(see below)
+        dist_type='random':    the rewards of each (h,s,a) are not necessarily the same and are randomly picked, however different at each h.
+        dist_type='uniform':   rewards on the entire (s,a) space are identical and randomly chosen
+        dist_type='ergodic':   rewards of all (h,s,a) are identically chosen random value.
+    returns:    
+        reward.shape: torch.Size([H,nS,nA])
+    description:
+        reward[h][s][a] stands for r_h(s,a), which picks value in [0,1]
+    '''
+    if init_type=='uniform':
+        r_unif=np.random.rand()
+        reward=torch.ones([H,nS,nA])*r_unif
+        return reward
+    elif init_type=='random':
+        reward=torch.zeros([H,nS,nA])
+        for h in range(H):
+            reward[h]=torch.rand([nS,nA])
+            return reward
+    elif init_type=='ergodic':
+        reward_layer=torch.rand([nS,nA]).unsqueeze(0)
+        reward = reward_layer.repeat(H,1,1)
+    else:
+        raise(NotImplementedError)
+
 
 def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
-
     '''
     inputs
         nS, nO, nA: integers. 
@@ -70,7 +96,6 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
     '''
     #emit_kernel=torch.transpose(torch.tensor([[get_random_dist(nO) for _ in range(nS)] for _ in range(horizon)]),1,2)
     emit_kernel=torch.transpose(torch.tensor(np.array([np.array([get_random_dist(dim=nO,dist_type=init_type) for _ in range(nS)])for _ in range(horizon)])),1,2)
-
     '''
     transition matrices
     name:trans_kernel
@@ -86,7 +111,8 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
     for s in range(nS):
         for a in range(nA):
             trans_kernel[horizon-1][:,s,a]=torch.eye(nS)[0]
-    return (init_dist,trans_kernel,emit_kernel)
+    
+    return (init_dist.to(torch.float64),trans_kernel.to(torch.float64),emit_kernel.to(torch.float64))
 
 
 def sample_trajectory(horizon:int,policy,model):

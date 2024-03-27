@@ -42,7 +42,7 @@ def test_MC_1D():
         plt.show()
 
 
-from POMDP_model import initialize_model, initialize_policy, sample_trajectory
+from POMDP_model import initialize_model, initialize_policy, initialize_reward, sample_trajectory
 
 def test_MC_high_dimensional():
     # load hyper parameters from a yaml file.
@@ -57,7 +57,7 @@ def test_MC_high_dimensional():
     delta=hyper_param['sizes']['confidence_level']
     gamma=hyper_param['sizes']['discount_factor']
     iota =np.log(K*H*nS*nO*nA/delta)
-    reward=torch.tensor([H,nS,nA])
+    reward=initialize_reward(nS,nA,H,'random')
 
 
     # start the algorithm
@@ -73,11 +73,16 @@ def test_MC_high_dimensional():
     policy=initialize_policy(nO,nA,H)
 
     # (s,o,a) occurrence counters
-    Ns=torch.zeros([nS])           # frequency of s0
+    Ns_init=torch.zeros([nS])      # frequency of s0
+    
     Nos=torch.zeros([H,nO,nS])     # frequency of o  given s
-    Nssa=torch.zeros([H,nS,nS,nA]) # frequency of s' given (s,a)
     Nos_ones=torch.ones([1,nS])    # matrix of 1 of size N(s)
+    Ns=torch.ones([H,nS])          # frequency of s:                \widehat{N}_{h}(s_{h}) \vee 1
+    
+    Nssa=torch.zeros([H,nS,nS,nA]) # frequency of s' given (s,a)
     Nssa_ones=torch.ones([1,nS,nA])# matrix of 1 of size N(s,a) 
+    Nsa=torch.ones([H,nS,nA])      # frequency of (s,a) :           \widehat{N}_{h}(s_h,a_h) \vee 1
+
     # errors after each iteration.
     mu_err=np.zeros([num_iter])
     T_err=np.zeros([num_iter])
@@ -88,7 +93,7 @@ def test_MC_high_dimensional():
         traj=sample_trajectory(H,policy,model=(mu,T,O))
         # update s0 count
         s0=traj[0][0]
-        Ns[s0]+=1
+        Ns_init[s0]+=1
         for h in range(H):
             # update s->o pairs count.
             s,o=traj[0,h], traj[1,h]
@@ -98,16 +103,17 @@ def test_MC_high_dimensional():
             s,a,ss=traj[0,h], traj[2,h], traj[0,h+1]
             Nssa[h][ss][s][a]+=1
         # update empirical initial distribution.
-        mu_hat=Ns/sum(Ns)
+        mu_hat=Ns_init/sum(Ns_init)
         # update empirical observation matrix.
         for h in range(H):
             #print(f"size: Nos[h]={Nos[h].shape}, ones={Nos_ones.shape}, sum={torch.sum(Nos[h],dim=0,keepdim=True).shape}")
-            O_hat[h]=Nos[h]/(torch.max(Nos_ones, torch.sum(Nos[h],dim=0,keepdim=True)))
+            Ns[h]=(torch.max(Nos_ones, torch.sum(Nos[h],dim=0,keepdim=True)))
+            O_hat[h]=Nos[h]/Ns[h]
         # update empirical transition.  The last transition is an absorbing state 0.
         for h in range(H-1):
             #print(f"size: Nssa[h]={Nssa[h].shape}, ones={Nssa_ones.shape}, sum={torch.sum(Nssa[h],dim=0,keepdim=True).shape}")
-            sum_states=(torch.max(Nssa_ones, torch.sum(Nssa[h],dim=0,keepdim=True)))
-            T_hat[h]=Nssa[h]/sum_states
+            Nsa[h]=(torch.max(Nssa_ones, torch.sum(Nssa[h],dim=0,keepdim=True)))
+            T_hat[h]=Nssa[h]/Nsa[h]
         for s in range(nS):
             for a in range(nA):
                 T_hat[H-1][:,s,a]=torch.eye(nS)[0]
