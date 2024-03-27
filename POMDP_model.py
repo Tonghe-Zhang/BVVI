@@ -142,7 +142,7 @@ def sample_trajectory(horizon:int,policy,model):
         full_traj[1][h]=observation
         # A_h \sim \pi_h(\cdot |f_h). We do not collect A_{H+1}, which is a[H]. We set a[H] as 0
         if h<horizon:
-            action=action_from_policy(full_traj[1:3,:],h,policy,horizon)
+            action=action_from_policy(full_traj[1:3,:],h,policy)
             full_traj[2][h]=action
         # S_h \sim \mathbb{T}_{h}(\cdot|s_{h},a_{h})
         if h<horizon:
@@ -162,6 +162,7 @@ def initialize_policy(nO:int,nA:int,H:int):
         sizes of the observation and action space (nO,nA), and the horizon length H
 
     returns:
+        length H tensor list.
         total dimension: 2H+1
         .shape =torch.Size([horizon,        nO, nA, nO, nA, nO, nA, ... nO,        nA])
 
@@ -174,39 +175,53 @@ def initialize_policy(nO:int,nA:int,H:int):
             the distribution of ah, initialized as uniform distribution.
 
     How to access the policy_table:
+    policy[h][f] is a tensor of size torch.Size([nA]), corresponds to \pi_h(\cdot|f_h)
+    policy[h][f][a] is \pi_h(a|f_h)
+    To see the shapes:
+        In [219]: for h in range(H):
+        ...:     print(policy[h].shape)
+        ...:
+        torch.Size([4, 2])
+        torch.Size([4, 2, 4, 2])
+        torch.Size([4, 2, 4, 2, 4, 2])
+        torch.Size([4, 2, 4, 2, 4, 2, 4, 2])
+        torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
+
+    How to sample from the policy:
     input some tuple fh of length 2H-1 
         fh=(1, 0, 1, 0, 1, 0, 1, 0, 1)
     input the horizon number h  (so that only the first 2h-1 elements of fh will be valid)
         h=2
     then the distribution of a_h \sim \pi_h(\cdot|fh) is 
-        dist=policy_table[h][f].unsqueeze(0)
+        dist=policy[h][f].unsqueeze(0)
     which is of shape
         torch.Size([1, nA])
     To sample from an action from the policy at step h with history f_h, run this line:
         ah=sample_from(dist)
     '''
-    #determine the sizes of each dimension. 
-    shape = [nO if i % 2 == 0 else nA for i in range(2 *H)]
-    #intialize the policy as a uniform distritbuion
-    one_step_policy=torch.ones(*shape)*(1/nA)             
-    #stack \pi=\{\pi_1,\pi_2,\cdots, \pi_H\}      
-    policy_table=torch.stack( tuple([one_step_policy for _ in range(H)]) )
-    return policy_table
 
-def action_from_policy(raw_history:tuple,h:int,policy_table,H:int)->int:
+    policy=[None for _ in range(H)]
+    for h in range(H):
+        policy[h]=(torch.ones([nO if i%2==0 else nA for i in range(2*h)]+[nO] +[nA])*(1/nA)).to(torch.float64)
+    return policy
+
+def action_from_policy(raw_history:tuple,h:int,policy)->int:
     '''
     sample an action from policy_table at step h, with previous observable history indicated by a tuple 'history'.
     '''
     # convert the two-row observable history "raw_history" to a one-row oaoaoa tuple.
-    history=[0 for _ in range(2*H-1)]
+    history=[-1 for _ in range(2*h+1)]
     for t in range(h):
         history[2*t]=int(raw_history[0][t])
         history[2*t+1]=int(raw_history[1][t])
     history[2*h]=int(raw_history[0][h])
+
     history=tuple(history)
-    # retrieve \pi_h(\cdot|f_h)   
-    action_distribution=policy_table[h][history]
-    # a_h \sim \pi_h(\cdot|f_h)   
+
+    # retrieve \pi_h(\cdot|f_h)   .shape=torch.Size([nA])
+    action_distribution=policy[h][history] 
+
+    # a_h \sim \pi_h(\cdot|f_h)
     action = sample_from(action_distribution)
     return action
 
@@ -232,4 +247,23 @@ def test_sampling():
     
     show_trajectory(traj)
 
+def test_policy():
+    '''
+    view the shapes of the policies. 
+    run this function we should obtain:
+    with (nO,nA)=(4,2)
+    @ h=0, policy[0].shape=torch.Size([4, 2])
+    @ h=1, policy[1].shape=torch.Size([4, 2, 4, 2])
+    @ h=2, policy[2].shape=torch.Size([4, 2, 4, 2, 4, 2])
+    @ h=3, policy[3].shape=torch.Size([4, 2, 4, 2, 4, 2, 4, 2])      
+    @ h=4, policy[4].shape=torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
+    '''
+
+    policy=initialize_policy(nO,nA,H)
+    normalized=True
+    for h in range(H):
+        print(f"@ h={h}, policy[{h}].shape={policy[h].shape}")
+
 test_sampling()
+
+test_policy()

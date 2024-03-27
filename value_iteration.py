@@ -75,10 +75,6 @@ Ns=torch.ones([H+1,nS])
 ################################################################
 ################################################################
 
-
-
-
-
 # Bonus residues, correspond to \mathsf{t}_h^k(\cdot,\cdot)  and  \mathsf{o}_{h+1}^k(s_{h+1})
 bonus_res_t=torch.ones([H,nS,nA]).to(torch.float64)
 bonus_res_o=torch.ones([H+1,nS]).to(torch.float64)   # in fact there is no h=0 for residue o. we shift everything right.
