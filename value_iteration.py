@@ -8,8 +8,14 @@ import itertools
 # load the RL platform
 from POMDP_model import initialize_model, initialize_policy, initialize_reward, sample_trajectory
 
-from POMDP_model import Nsa, Ns
 
+
+  
+
+def negative_func(x:np.float)->np.float:
+    return np.min(x,0)
+def positive_func(x:np.float)->np.float:
+    return np.max(x,0)
 
 
 '''
@@ -62,9 +68,20 @@ mu_hat, T_hat, O_hat=initialize_model(nS,nO,nA,H,init_type='uniform')
 policy=initialize_policy(nO,nA,H)
 
 
+################################################################
+##### borrowed from test_monte_carlo.py file####################
+Nsa=torch.ones([H,nS,nA])
+Ns=torch.ones([H+1,nS])
+################################################################
+################################################################
+
+
+
+
+
 # Bonus residues, correspond to \mathsf{t}_h^k(\cdot,\cdot)  and  \mathsf{o}_{h+1}^k(s_{h+1})
 bonus_res_t=torch.ones([H,nS,nA]).to(torch.float64)
-bonus_res_o=torch.ones([H,nS]).to(torch.float64)
+bonus_res_o=torch.ones([H+1,nS]).to(torch.float64)   # in fact there is no h=0 for residue o. we shift everything right.
 
 # Bonus
 ''''
@@ -79,8 +96,8 @@ bonus=torch.ones([H,nS,nA]).to(torch.float64)
 # create the history spaces \{\mathcal{F}_h\}_{h=1}^{H}
 observation_space=tuple(list(np.arange(nO)))
 action_space=tuple(list(np.arange(nA)))
-history_space=[None for _ in range(H)]
-for h in range(H):
+history_space=[None for _ in range(H+1)]
+for h in range(H+1):
     # Create the space of \mathcal{F}_h = (\mathcal{O}\times \mathcal{A})^{h-1}\times \mathcal{O}
     history_space[h]=[observation_space if i%2==0 else action_space for i in range(2*(h))]+[observation_space]
 
@@ -88,8 +105,8 @@ for h in range(H):
 Create the series of (empirical) risk-sensitive beliefs
 sigma :  \vec{\sigma}_{h,f_h} \in \R^{S}
 '''
-sigma_hat=[None for _ in range(H)]
-for h in range(H):
+sigma_hat=[None for _ in range(H+1)]
+for h in range(H+1):
     sigma_hat[h]=torch.zeros([nO if i%2==0 else nA for i in range(2*(h))]+[nO] +[nS], dtype=torch.float64)
 '''
     In the following loop, 
@@ -110,20 +127,84 @@ for h in range(H):
             print(f"\t\twhose preivous history is {hist[0:-2]}, with previous belief {sigma[h-1][hist[0:-2]].shape}")
 '''
 
-beta_hat=torch.ones_like(sigma_hat)
+
+'''
+Create beta vectors, Q-values and value functions
+beta_hat:       tensor list of length H+1
+    beta_hat[h][hist][s] is \widehat{\beta}_{h, f_h}^k(s_h)
+Q_function:     tensor list of length H
+    each element Q_function[h].shape    torch.Size([nO, nA, nO, nA, nO, nA])
+        is the Q function at step h. The last dimension is the action a_h, the rest are history coordinates.
+
+    Q_function[h][history].shape: torch.Size([nA])
+        is the Q function vector at step h, conditioned on history: Q_f(\cdot;f_h), with different actions
+
+    Q_function[h][history][a] is Q_h(a;f_h)
+
+value_function: tensor list of length H
+    each element value_function[h].shape :  torch.Size([4, 2, 4, 2, 4]) is the value function at step h.
+
+Run this command to check the shapes:
+
+for h in range(H+1):
+    print(sigma_hat[h].shape)
+
+    torch.Size([4, 2])
+    torch.Size([4, 2, 4, 2])
+    torch.Size([4, 2, 4, 2, 4, 2])
+    torch.Size([4, 2, 4, 2, 4, 2, 4, 2])
+    torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
+    torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
+
+for h in range(H+1):
+    print(beta_hat[h].shape)
+
+    torch.Size([4, 2])
+    torch.Size([4, 2, 4, 2])
+    torch.Size([4, 2, 4, 2, 4, 2])
+    torch.Size([4, 2, 4, 2, 4, 2, 4, 2])
+    torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
+    torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
+
+for h in range(H):
+    print(Q_function[h].shape)
+
+    torch.Size([4, 2])
+    torch.Size([4, 2, 4, 2])
+    torch.Size([4, 2, 4, 2, 4, 2])
+    torch.Size([4, 2, 4, 2, 4, 2, 4, 2])
+    torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
+
+for h in range(H):
+    print(value_function[h].shape)
+
+    torch.Size([4])
+    torch.Size([4, 2, 4])
+    torch.Size([4, 2, 4, 2, 4])
+    torch.Size([4, 2, 4, 2, 4, 2, 4])
+    torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4])
+
+'''
+
+beta_hat=[torch.ones_like(sigma_hat[h]) for h in range(H+1)] 
+
+Q_function=[torch.zeros(sigma_hat[h].shape[:-1]+(nA,)) for h in range(H)]
+
+value_function=[torch.zeros(sigma_hat[h].shape[:-1]) for h in range(H)]
+
 
 '''
 To view how each layer evolves, run:
 # for test only
 for h in range(H):
     sigma_hat[h]=torch.ones_like(sigma_hat[h])*(-114514.00)
-
 '''
 for k in range(K):
+    # Belief propagation
     # line 6 in the original paper.
     sigma_hat[0]=mu_hat.unsqueeze(0).repeat(nO,1)
     # line 7 to 9 in the original paper.
-    for h in range(1,H,1):
+    for h in range(1,H+1,1):
         #print(f"progress:{[torch.min(sigma_hat[t]).item() for t in range(H)]}")   # view how each layer evolves.
         history_coordinates=list(itertools.product(*history_space[h]))
         for hist in history_coordinates:
@@ -131,17 +212,65 @@ for k in range(K):
             prev_hist, act, obs=hist[0:-2], hist[-2], hist[-1]   
             # use Eqs.~\eqref{40} in the original paper to simplify the update rule.
             # be aware that we should use @ but not * !!!   * is Hadamard product while @ is matrix/vector product.
-            sigma_hat[h][hist]=np.double(nO)*torch.diag(O_hat[h][obs,:]).to(dtype=torch.float64) @ T_hat[h,:,:,act]  @  torch.diag(torch.exp(gamma* reward[h,:,act])).to(dtype=torch.float64) @ sigma_hat[h-1][prev_hist]
+            sigma_hat[h][hist]=np.double(nO)*torch.diag(O_hat[h][obs,:]).to(dtype=torch.float64) @ T_hat[h-1,:,:,act]  @  torch.diag(torch.exp(gamma* reward[h-1,:,act])).to(dtype=torch.float64) @ sigma_hat[h-1][prev_hist]
     # line 11 of the original paper
     bonus_res_t=torch.min(torch.ones([H,nS,nA]), 3*torch.sqrt(nS*H*iota / Nsa))
-    bonus_res_o=torch.min(torch.ones([H,nS]), 3*torch.sqrt(nO*H*iota/Ns))
+    bonus_res_o=torch.min(torch.ones([H+1,nS]), 3*torch.sqrt(nO*H*iota/Ns))
     
     # line 12 of the original paper. Notice that h starts from 0 in pytorch it's different from the original paper.
-    for h in range(H-1):
+    for h in range(H):
         bonus[h]=np.fabs(np.exp(gamma*(H-h))-1)*\
-            torch.min(torch.ones([H,nS,nA]), \
-                    bonus_res_t[h]+torch.tensordot(bonus_res_o[h+1].to(torch.float64), T_hat[h], dims=1))
-    # pay special attenstion to the terminal state: s_{H+1} is absorbed to the same state 0.
-    bonus[H-1]=np.fabs(np.exp(gamma)-1)*torch.min(torch.ones([H,nS,nA]), bonus_res_t[h]+\
-                                                torch.ones([H,nS,nA])*np.min(1,3*np.sqrt(nO*H*iota/k)))
+            torch.min(torch.ones([nS,nA]), \
+                bonus_res_t[h]+torch.tensordot(bonus_res_o[h+1].to(torch.float64), T_hat[h], dims=1))
     
+    # Dynamic programming starts
+    # re-initialize
+    beta_hat=[torch.ones_like(sigma_hat[h]) for h in range(H+1)] 
+    for q_func in Q_function:
+        q_func.zero_()
+    for v_func in value_function:
+        v_func.zero_()
+    # line 16 in the original paper.
+    for h in range (H-1,-1,-1):
+        '''
+        iter h from H-1 to 0
+        policy is defined as stochastic, so its last dimension is nA and it shares the same size as Q-functions.
+        only through dynamic programming our policy is deterministic (one-hot)
+        the value function is 1 dimension lower than q function.
+        '''
+        # Invoke Bellman equation (49) under beta vector representation
+        history_coordinates=list(itertools.product(*history_space[h]))
+        for hist in history_coordinates:     # here hist represents f_h
+            for act in range(nA):         # here action represents a_h, here obs is for o_{h+1}
+                # line 19 in the original paper.
+                Q_function[h][hist][act]=\
+                    gamma* np.log(1/nO * \
+                                  sum([torch.inner(sigma_hat[h+1][(hist)+(act,obs)] , beta_hat[h+1][(hist)+(act,obs)]) for obs in range(nO)] ))
+        # line 22 in the original paper.
+        value_function[h]=torch.max(Q_function[h],dim=-1,keepdim=False).values
+        # line 23 in the original paper.
+
+
+        #??????????????????????????????????
+        policy[h]=torch.max(Q_function[h],dim=-1,keepdim=True).indices
+        # 
+        action_greedy=torch.max(policy[h][hist]).values
+        #??????????????????????????????????
+
+        # line 23 in the original paper.
+        for state in range(nS):
+            beta_hat[h][hist][state]=np.exp(gamma*reward[h][state][action_greedy])*\
+                sum([ T_hat[h][next_state][state][action_greedy]*
+                    (sum([
+                        O_hat[h+1][next_obs][next_state]*\
+                        beta_hat[h+1][(hist)+(action_greedy,next_obs)][next_state]
+                    ] for next_obs in range(nO)))
+                ] for next_state in range(nS))\
+                + np.sign(gamma)*bonus[h+1][state][action_greedy]
+            gamma_plus=positive_func(gamma)
+            gamma_minus=negative_func(gamma)
+            # line 24: Control the range of beta vecto
+            beta_hat[h][hist][state]=np.clip(beta_hat[h][hist][state], \
+                                             np.exp(gamma_minus*(H-h)), \
+                                                np.exp(gamma_plus*(H-h)))
+          

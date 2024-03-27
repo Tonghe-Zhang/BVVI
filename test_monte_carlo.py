@@ -121,11 +121,6 @@ def test_MC_high_dimensional():
         T_err[k]=torch.linalg.norm(T-T_hat)/T.numel()
         O_err[k]=torch.linalg.norm(O-O_hat)/O.numel()
 
-    #print(f"T.shape={T.shape}, T_hat.shape={T_hat.shape}")
-
-    #norms=[ torch.linalg.norm(T[h]-T_hat[h])/T[h].numel() for h in range(H)]
-    #plt.plot(norms)
-    #plt.show()
     log_output(mu_err,T_err,O_err, H)
     
 def log_output(mu_err,T_err,O_err, H:int)->None:
@@ -153,4 +148,4 @@ def log_output(mu_err,T_err,O_err, H:int)->None:
         plt.savefig('plots/Monte-Carlo-Estimation-Error.jpg')
         plt.show()
 
-test_MC_high_dimensional()
+# test_MC_high_dimensional()
