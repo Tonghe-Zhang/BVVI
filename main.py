@@ -90,75 +90,75 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics)->tuple:
         bonus_res_t=torch.min(torch.ones([H,nS,nA]), 3*torch.sqrt(nS*H*iota / Nsa))
         bonus_res_o=torch.min(torch.ones([H+1,nS]), 3*torch.sqrt(nO*H*iota/Ns))
         
-    # line 12 of the original paper. Notice that h starts from 0 in pytorch it's different from the original paper.
-    for h in range(H):
-        bonus[h]=np.fabs(np.exp(gamma*(H-h))-1)*\
-            torch.min(torch.ones([nS,nA]), \
-                bonus_res_t[h]+torch.tensordot(bonus_res_o[h+1].to(torch.float64), T_hat[h], dims=1))
-    if prt_progress:
-        print(f"\t\t belief propagation ends...") 
-
-    # %%%%%% Dynamic programming %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    if prt_progress:
-        print(f"\t\t dynamic programming starts...")
-    # re-initialize
-    beta_hat=[torch.ones_like(sigma_hat[h]) for h in range(H+1)] 
-    for q_func in Q_function:
-        q_func.zero_()
-    for v_func in value_function:
-        v_func.zero_()
-    # line 16 in the original paper.
-    for h in range (H-1,-1,-1):
-        '''
-        iter h from H-1 to 0
-        policy is defined as stochastic, so its last dimension is nA and it shares the same size as Q-functions.
-        only through dynamic programming our policy is deterministic (one-hot)
-        the value function is 1 dimension lower than q function.
-        '''
-        # Invoke Bellman equation (49) under beta vector representation
-        print(f"\t\t\t update Q function...")
-        history_coordinates=list(itertools.product(*history_space[h]))
-        for hist in history_coordinates:     # here hist represents f_h
-            for act in range(nA):         # here action represents a_h, here obs is for o_{h+1}
-                # line 19 in the original paper.
-                Q_function[h][hist][act]=\
-                    gamma* np.log(1/nO * \
-                                sum([torch.inner(sigma_hat[h+1][(hist)+(act,obs)] , beta_hat[h+1][(hist)+(act,obs)]) for obs in range(nO)] ))
-        
-        # line 22 in the original paper.
-        print(f"\t\t\t update value function...")
-        value_function[h]=torch.max(Q_function[h],dim=-1,keepdim=False).values
-        # line 23 in the original paper.
-
-        # select greedy action for the policy. The policy is one-hot in the last dimension.
-        print(f"\t\t\t update greedy policy...")
-        max_indices=torch.argmax(Q_function[h],dim=-1,keepdim=True)
-        policy_learnt[h]=torch.zeros_like(policy_learnt[h]).scatter(dim=-1,index=max_indices,src=Q_function[h])
-
-        # action_greedy is \widehat{\pi}_h^k(f_h)
-        action_greedy=torch.argmax(policy_learnt[h][hist]).item()
-        
-        # line 23 in the original paper.
+        # line 12 of the original paper. Notice that h starts from 0 in pytorch it's different from the original paper.
+        for h in range(H):
+            bonus[h]=np.fabs(np.exp(gamma*(H-h))-1)*\
+                torch.min(torch.ones([nS,nA]), \
+                    bonus_res_t[h]+torch.tensordot(bonus_res_o[h+1].to(torch.float64), T_hat[h], dims=1))
         if prt_progress:
-            print(f"\t\t\t update beta vector...")
-        for state in range(nS):
-            beta_hat[h][hist][state]=np.exp(gamma*reward[h][state][action_greedy])*\
-                sum([ T_hat[h][next_state][state][action_greedy]*
-                    (
-                        sum([ O_hat[h+1][next_obs][next_state]* beta_hat[h+1][hist+(action_greedy,next_obs,)][next_state] for next_obs in range(nO)])
-                    )
-                for next_state in range(nS)
-                ])\
-                + np.sign(gamma)*bonus[h][state][action_greedy]
+            print(f"\t\t belief propagation ends...") 
+
+        # %%%%%% Dynamic programming %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        if prt_progress:
+            print(f"\t\t dynamic programming starts...")
+        # re-initialize
+        beta_hat=[torch.ones_like(sigma_hat[h]) for h in range(H+1)] 
+        for q_func in Q_function:
+            q_func.zero_()
+        for v_func in value_function:
+            v_func.zero_()
+        # line 16 in the original paper.
+        for h in range (H-1,-1,-1):
+            '''
+            iter h from H-1 to 0
+            policy is defined as stochastic, so its last dimension is nA and it shares the same size as Q-functions.
+            only through dynamic programming our policy is deterministic (one-hot)
+            the value function is 1 dimension lower than q function.
+            '''
+            # Invoke Bellman equation (49) under beta vector representation
+            print(f"\t\t\t update Q function...")
+            history_coordinates=list(itertools.product(*history_space[h]))
+            for hist in history_coordinates:     # here hist represents f_h
+                for act in range(nA):         # here action represents a_h, here obs is for o_{h+1}
+                    # line 19 in the original paper.
+                    Q_function[h][hist][act]=\
+                        gamma* np.log(1/nO * \
+                                    sum([torch.inner(sigma_hat[h+1][(hist)+(act,obs)] , beta_hat[h+1][(hist)+(act,obs)]) for obs in range(nO)] ))
             
-            # line 24: Control the range of beta vector
-            gamma_plus=positive_func(gamma)
-            gamma_minus=negative_func(gamma)
-            beta_hat[h][hist][state]=np.clip(beta_hat[h][hist][state], \
-                                            np.exp(gamma_minus*(H-h)), \
-                                                np.exp(gamma_plus*(H-h)))
-        if prt_progress:
-            print(f"\t\tfinish horizon {h}/{H}")
+            # line 22 in the original paper.
+            print(f"\t\t\t update value function...")
+            value_function[h]=torch.max(Q_function[h],dim=-1,keepdim=False).values
+            # line 23 in the original paper.
+
+            # select greedy action for the policy. The policy is one-hot in the last dimension.
+            print(f"\t\t\t update greedy policy...")
+            max_indices=torch.argmax(Q_function[h],dim=-1,keepdim=True)
+            policy_learnt[h]=torch.zeros_like(policy_learnt[h]).scatter(dim=-1,index=max_indices,src=Q_function[h])
+
+            # action_greedy is \widehat{\pi}_h^k(f_h)
+            action_greedy=torch.argmax(policy_learnt[h][hist]).item()
+            
+            # line 23 in the original paper.
+            if prt_progress:
+                print(f"\t\t\t update beta vector...")
+            for state in range(nS):
+                beta_hat[h][hist][state]=np.exp(gamma*reward[h][state][action_greedy])*\
+                    sum([ T_hat[h][next_state][state][action_greedy]*
+                        (
+                            sum([ O_hat[h+1][next_obs][next_state]* beta_hat[h+1][hist+(action_greedy,next_obs,)][next_state] for next_obs in range(nO)])
+                        )
+                    for next_state in range(nS)
+                    ])\
+                    + np.sign(gamma)*bonus[h][state][action_greedy]
+                
+                # line 24: Control the range of beta vector
+                gamma_plus=positive_func(gamma)
+                gamma_minus=negative_func(gamma)
+                beta_hat[h][hist][state]=np.clip(beta_hat[h][hist][state], \
+                                                np.exp(gamma_minus*(H-h)), \
+                                                    np.exp(gamma_plus*(H-h)))
+            if prt_progress:
+                print(f"\t\tHorizon remains: {h}/{H}")
 
         # %%%%%% Parameter Learning %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         if prt_progress:
@@ -200,8 +200,12 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics)->tuple:
         mu_err[k]=torch.linalg.norm(mu-mu_hat)/mu.numel()
         T_err[k]=torch.linalg.norm(T-T_hat)/T.numel()
         O_err[k]=torch.linalg.norm(O-O_hat)/O.numel()
-
+        # log
+        if prt_progress:
+            print(f"tested_returns[{k}]={tested_returns[k]}, mu_err[{k}]={mu_err[k]}, T_err[{k}]={T_err[k]}, O_err[{k}]={O_err[k]}")
     # %%%%%% End of training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    if prt_progress:
+        print(f"End of training. number of iters K={K}")
     model_learnt=(mu_hat, T_hat, O_hat)
     evaluation_results=(mu_err,T_err,O_err,tested_returns)
     return (policy_learnt, model_learnt, evaluation_results)
@@ -221,7 +225,6 @@ def main(output_to_log_file=False):
         old_stdout = sys.stdout
         log_file = open("console_output.log","w")
         sys.stdout = log_file
-
     print('%'*100)
     print('test Beta Vector Value Iteration.')
     print('%'*100)
@@ -244,4 +247,4 @@ def main(output_to_log_file=False):
         sys.stdout = old_stdout
         log_file.close()
 
-main(output_to_log_file=False)
+main(output_to_log_file=True)
