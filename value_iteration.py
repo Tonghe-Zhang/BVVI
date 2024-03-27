@@ -8,41 +8,11 @@ import itertools
 # load the RL platform
 from POMDP_model import initialize_model, initialize_policy, initialize_reward, sample_trajectory
 
-
-
-  
-
-def negative_func(x:np.float)->np.float:
+def negative_func(x:np.double)->np.double:
     return np.min(x,0)
-def positive_func(x:np.float)->np.float:
+def positive_func(x:np.double)->np.double:
     return np.max(x,0)
 
-
-'''
-
-for o1 in range(nO):
-    f=(o1,)
-    print(f"\t f={f}")
-    for a in range(nA):
-        for o in range(nO):
-            ff=f+(a,)+(o,)
-            print(f"\t ff={ff}")
-output:
-    
-for o1 in range(nO):
-    f=(o1,)
-    
-    # assign value to all g[o1]
-
-for h in range(H):
-    for f in (F[h]):
-        # assign value to g[f]
-        for a in range(nA):
-            for o in range(nO):
-                ff=f+(a,)+(o,)
-                # assign value to each g[(f,a,o)]=G(g_1(a,o), g_2(f))
-
-'''
 
 # load hyper parameters from a yaml file.
 with open("hyper_param.yaml", 'r') as file:
@@ -139,54 +109,13 @@ Q_function:     tensor list of length H
 
 value_function: tensor list of length H
     each element value_function[h].shape :  torch.Size([4, 2, 4, 2, 4]) is the value function at step h.
-
-Run this command to check the shapes:
-
-for h in range(H+1):
-    print(sigma_hat[h].shape)
-
-    torch.Size([4, 2])
-    torch.Size([4, 2, 4, 2])
-    torch.Size([4, 2, 4, 2, 4, 2])
-    torch.Size([4, 2, 4, 2, 4, 2, 4, 2])
-    torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
-    torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
-
-for h in range(H+1):
-    print(beta_hat[h].shape)
-
-    torch.Size([4, 2])
-    torch.Size([4, 2, 4, 2])
-    torch.Size([4, 2, 4, 2, 4, 2])
-    torch.Size([4, 2, 4, 2, 4, 2, 4, 2])
-    torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
-    torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
-
-for h in range(H):
-    print(Q_function[h].shape)
-
-    torch.Size([4, 2])
-    torch.Size([4, 2, 4, 2])
-    torch.Size([4, 2, 4, 2, 4, 2])
-    torch.Size([4, 2, 4, 2, 4, 2, 4, 2])
-    torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
-
-for h in range(H):
-    print(value_function[h].shape)
-
-    torch.Size([4])
-    torch.Size([4, 2, 4])
-    torch.Size([4, 2, 4, 2, 4])
-    torch.Size([4, 2, 4, 2, 4, 2, 4])
-    torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4])
-
 '''
 
-beta_hat=[torch.ones_like(sigma_hat[h]) for h in range(H+1)] 
+beta_hat=[torch.ones_like(sigma_hat[h],dtype=torch.float64) for h in range(H+1)] 
 
-Q_function=[torch.zeros(sigma_hat[h].shape[:-1]+(nA,)) for h in range(H)]
+Q_function=[torch.zeros(sigma_hat[h].shape[:-1]+(nA,),dtype=torch.float64) for h in range(H)]
 
-value_function=[torch.zeros(sigma_hat[h].shape[:-1]) for h in range(H)]
+value_function=[torch.zeros(sigma_hat[h].shape[:-1],dtype=torch.float64) for h in range(H)]
 
 
 '''
@@ -196,7 +125,10 @@ for h in range(H):
     sigma_hat[h]=torch.ones_like(sigma_hat[h])*(-114514.00)
 '''
 for k in range(K):
-    # Belief propagation
+    print(f"Into episode {k}/{K}={k/K}")
+
+    # %%%%%%% Belief propagation  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    print(f"\t\t belief propagation starts...")
     # line 6 in the original paper.
     sigma_hat[0]=mu_hat.unsqueeze(0).repeat(nO,1)
     # line 7 to 9 in the original paper.
@@ -218,8 +150,9 @@ for k in range(K):
         bonus[h]=np.fabs(np.exp(gamma*(H-h))-1)*\
             torch.min(torch.ones([nS,nA]), \
                 bonus_res_t[h]+torch.tensordot(bonus_res_o[h+1].to(torch.float64), T_hat[h], dims=1))
-    
-    # Dynamic programming starts
+    print(f"\t\t belief propagation ends...")
+    # %%%%%% Dynamic programming %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    print(f"\t\t dynamic programming starts...")
     # re-initialize
     beta_hat=[torch.ones_like(sigma_hat[h]) for h in range(H+1)] 
     for q_func in Q_function:
@@ -235,6 +168,7 @@ for k in range(K):
         the value function is 1 dimension lower than q function.
         '''
         # Invoke Bellman equation (49) under beta vector representation
+        print(f"\t\t\t update Q function...")
         history_coordinates=list(itertools.product(*history_space[h]))
         for hist in history_coordinates:     # here hist represents f_h
             for act in range(nA):         # here action represents a_h, here obs is for o_{h+1}
@@ -242,31 +176,55 @@ for k in range(K):
                 Q_function[h][hist][act]=\
                     gamma* np.log(1/nO * \
                                   sum([torch.inner(sigma_hat[h+1][(hist)+(act,obs)] , beta_hat[h+1][(hist)+(act,obs)]) for obs in range(nO)] ))
+        
         # line 22 in the original paper.
+        print(f"\t\t\t update value function...")
         value_function[h]=torch.max(Q_function[h],dim=-1,keepdim=False).values
         # line 23 in the original paper.
 
+        # select greedy action for the policy. The policy is one-hot in the last dimension.
+        print(f"\t\t\t update greedy policy...")
+        max_indices=torch.argmax(Q_function[h],dim=-1,keepdim=True)
+        policy[h]=torch.zeros_like(policy[h]).scatter(dim=-1,index=max_indices,src=Q_function[h])
 
-        #??????????????????????????????????
-        policy[h]=torch.max(Q_function[h],dim=-1,keepdim=True).indices
-        # 
-        action_greedy=torch.max(policy[h][hist]).values
-        #??????????????????????????????????
-
+        # action_greedy is \widehat{\pi}_h^k(f_h)
+        action_greedy=torch.argmax(policy[h][hist]).item()
+        
         # line 23 in the original paper.
+        print(f"\t\t\t update beta vector...")
         for state in range(nS):
             beta_hat[h][hist][state]=np.exp(gamma*reward[h][state][action_greedy])*\
                 sum([ T_hat[h][next_state][state][action_greedy]*
-                    (sum([
-                        O_hat[h+1][next_obs][next_state]*\
-                        beta_hat[h+1][(hist)+(action_greedy,next_obs)][next_state]
-                    ] for next_obs in range(nO)))
-                ] for next_state in range(nS))\
-                + np.sign(gamma)*bonus[h+1][state][action_greedy]
+                    (
+                        sum([ O_hat[h+1][next_obs][next_state]* beta_hat[h+1][hist+(action_greedy,next_obs,)][next_state] for next_obs in range(nO)])
+                     )
+                 for next_state in range(nS)
+                 ])\
+                + np.sign(gamma)*bonus[h][state][action_greedy]
+            
+            # line 24: Control the range of beta vector
             gamma_plus=positive_func(gamma)
             gamma_minus=negative_func(gamma)
-            # line 24: Control the range of beta vecto
             beta_hat[h][hist][state]=np.clip(beta_hat[h][hist][state], \
                                              np.exp(gamma_minus*(H-h)), \
                                                 np.exp(gamma_plus*(H-h)))
-          
+        print(f"\t\tfinish horizon {h}/{H}")
+
+
+
+'''
+next_obs=0
+            next_state=0
+            print(f"hist+(action_greedy,next_obs,)={hist+(action_greedy,next_obs,)}")
+            print(f"beta_hat[h+1][hist+(action_greedy,next_obs,)][next_state]={beta_hat[h+1][hist+(action_greedy,next_obs,)][next_state]}")
+            print(f"O_hat[h+1][next_obs][next_state]={O_hat[h+1][next_obs][next_state]}")
+            print(f"list={}")
+
+
+            [ O_hat[h+1][next_obs][next_state]*beta_hat[h+1][hist+(action_greedy,next_obs,)][next_state] for next_obs in range(nO) ]
+
+
+            print(f"sum={sum([O_hat[h+1][next_obs][next_state]*beta_hat[h+1][hist+(action_greedy,next_obs,)][next_state]] for next_obs in range(nO))}")
+
+
+'''

@@ -175,7 +175,7 @@ def initialize_policy(nO:int,nA:int,H:int):
             the distribution of ah, initialized as uniform distribution.
 
     How to access the policy_table:
-    policy[h][f] is a tensor of size torch.Size([nA]), corresponds to \pi_h(\cdot|f_h)
+    policy[h][f] is a tensor of shape torch.Size([nA]), which corresponds to \pi_h(\cdot|f_h).   policy[h][history].shape=torch.Size([nA])
     policy[h][f][a] is \pi_h(a|f_h)
     To see the shapes:
         In [219]: for h in range(H):
@@ -218,7 +218,7 @@ def action_from_policy(raw_history:tuple,h:int,policy)->int:
 
     history=tuple(history)
 
-    # retrieve \pi_h(\cdot|f_h)   .shape=torch.Size([nA])
+    # retrieve \pi_h(\cdot|f_h)   policy[h][history] .shape=torch.Size([nA])
     action_distribution=policy[h][history] 
 
     # a_h \sim \pi_h(\cdot|f_h)
@@ -258,7 +258,6 @@ def test_policy():
     @ h=3, policy[3].shape=torch.Size([4, 2, 4, 2, 4, 2, 4, 2])      
     @ h=4, policy[4].shape=torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
     '''
-
     policy=initialize_policy(nO,nA,H)
     normalized=True
     for h in range(H):
