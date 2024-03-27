@@ -8,11 +8,11 @@ import itertools
 # load the RL platform
 from POMDP_model import initialize_model, initialize_policy, initialize_reward, sample_trajectory
 
+# (x)^+ and (x)^- functions.
 def negative_func(x:np.double)->np.double:
     return np.min(x,0)
 def positive_func(x:np.double)->np.double:
     return np.max(x,0)
-
 
 # load hyper parameters from a yaml file.
 with open("hyper_param.yaml", 'r') as file:
@@ -70,12 +70,7 @@ for h in range(H+1):
 '''
 Create the series of (empirical) risk-sensitive beliefs
 sigma :  \vec{\sigma}_{h,f_h} \in \R^{S}
-'''
-sigma_hat=[None for _ in range(H+1)]
-for h in range(H+1):
-    sigma_hat[h]=torch.zeros([nO if i%2==0 else nA for i in range(2*(h))]+[nO] +[nS], dtype=torch.float64)
-'''
-    In the following loop, 
+In the following loop, 
     "hist_coords" is the coordinates of all the possible histories in the history space of order h.
     This iterator traverses the history space of \mathcal{F}_h, which recordes all possible 
     observable histories up to step h. The order of traversal is identical to a binary search tree.
@@ -92,6 +87,9 @@ for h in range(H+1):
         if h >=1:
             print(f"\t\twhose preivous history is {hist[0:-2]}, with previous belief {sigma[h-1][hist[0:-2]].shape}")
 '''
+sigma_hat=[None for _ in range(H+1)]
+for h in range(H+1):
+    sigma_hat[h]=torch.zeros([nO if i%2==0 else nA for i in range(2*(h))]+[nO] +[nS], dtype=torch.float64)
 
 
 '''
@@ -118,6 +116,8 @@ Q_function=[torch.zeros(sigma_hat[h].shape[:-1]+(nA,),dtype=torch.float64) for h
 value_function=[torch.zeros(sigma_hat[h].shape[:-1],dtype=torch.float64) for h in range(H)]
 
 
+
+
 '''
 To view how each layer evolves, run:
 # for test only
@@ -125,7 +125,7 @@ for h in range(H):
     sigma_hat[h]=torch.ones_like(sigma_hat[h])*(-114514.00)
 '''
 for k in range(K):
-    print(f"Into episode {k}/{K}={k/K}")
+    print(f"Into episode {k}/{K}={(k/K):.2f}%")
 
     # %%%%%%% Belief propagation  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     print(f"\t\t belief propagation starts...")
@@ -209,22 +209,3 @@ for k in range(K):
                                              np.exp(gamma_minus*(H-h)), \
                                                 np.exp(gamma_plus*(H-h)))
         print(f"\t\tfinish horizon {h}/{H}")
-
-
-
-'''
-next_obs=0
-            next_state=0
-            print(f"hist+(action_greedy,next_obs,)={hist+(action_greedy,next_obs,)}")
-            print(f"beta_hat[h+1][hist+(action_greedy,next_obs,)][next_state]={beta_hat[h+1][hist+(action_greedy,next_obs,)][next_state]}")
-            print(f"O_hat[h+1][next_obs][next_state]={O_hat[h+1][next_obs][next_state]}")
-            print(f"list={}")
-
-
-            [ O_hat[h+1][next_obs][next_state]*beta_hat[h+1][hist+(action_greedy,next_obs,)][next_state] for next_obs in range(nO) ]
-
-
-            print(f"sum={sum([O_hat[h+1][next_obs][next_state]*beta_hat[h+1][hist+(action_greedy,next_obs,)][next_state]] for next_obs in range(nO))}")
-
-
-'''

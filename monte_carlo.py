@@ -71,6 +71,7 @@ def test_MC_high_dimensional():
     
     policy=initialize_policy(nO,nA,H)
 
+    # %%%%%% Parameter Learning %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     # (s,o,a) occurrence counters
     ## for initial state estimation
     Ns_init=torch.zeros([nS])      # frequency of s0
@@ -83,7 +84,7 @@ def test_MC_high_dimensional():
     Nos_ones=torch.ones([1,nS])    # matrix of 1 of size N(s)
     Ns=torch.ones([H+1,nS])        # frequency of s:                \widehat{N}_{h}(s_{h}) \vee 1    h=1,2,3,...H+1
     
-    # errors after each iteration.
+    # [Evaluation] Reset the errors before each iteration.
     mu_err=np.zeros([num_iter])
     T_err=np.zeros([num_iter])
     O_err=np.zeros([num_iter])
@@ -95,10 +96,12 @@ def test_MC_high_dimensional():
         # update s0 count
         s0=traj[0][0]
         Ns_init[s0]+=1
+
         # update s,a ->s' pairs count.
         for h in range(H):
             s,a,ss=traj[0,h], traj[2,h], traj[0,h+1]
             Nssa[h][ss][s][a]+=1
+
         # update s->o pairs count.
         for h in range(H+1):
             s,o=traj[0,h], traj[1,h]
@@ -106,21 +109,24 @@ def test_MC_high_dimensional():
         
         # update empirical initial distribution. \widehat{\mu}_1
         mu_hat=Ns_init/sum(Ns_init)
+
         # update empirical transition kernels.   \widehat{\mathbb{T}}^k_{h}: h=1,2,...H
         for h in range(H):
             #print(f"size: Nssa[h]={Nssa[h].shape}, ones={Nssa_ones.shape}, sum={torch.sum(Nssa[h],dim=0,keepdim=True).shape}")
             Nsa[h]=(torch.max(Nssa_ones, torch.sum(Nssa[h],dim=0,keepdim=True)))
             T_hat[h]=Nssa[h]/Nsa[h]
+
         # update empirical observation matrix.   \widehat{\mathbb{O}}^k_{h}: h=1,2,...H,H+1
         for h in range(H+1):
             #print(f"size: Nos[h]={Nos[h].shape}, ones={Nos_ones.shape}, sum={torch.sum(Nos[h],dim=0,keepdim=True).shape}")
             Ns[h]=(torch.max(Nos_ones, torch.sum(Nos[h],dim=0,keepdim=True)))
             O_hat[h]=Nos[h]/Ns[h]
-        # compute the average Frobenius error until this iter.
+        
+        # [Evaluation] compute the average Frobenius error until this iter.
         mu_err[k]=torch.linalg.norm(mu-mu_hat)/mu.numel()
         T_err[k]=torch.linalg.norm(T-T_hat)/T.numel()
         O_err[k]=torch.linalg.norm(O-O_hat)/O.numel()
-
+    # [Evaluation] output the loss curves of parameter learning.
     log_output(mu_err,T_err,O_err, H)
     
 def log_output(mu_err,T_err,O_err, H:int)->None:
@@ -147,5 +153,10 @@ def log_output(mu_err,T_err,O_err, H:int)->None:
         plt.legend(loc='upper right', labels=labels_plt)
         plt.savefig('plots/Monte-Carlo-Estimation-Error.jpg')
         plt.show()
+
+
+
+
+
 
 # test_MC_high_dimensional()
