@@ -110,13 +110,7 @@ for h in range(H):
             print(f"\t\twhose preivous history is {hist[0:-2]}, with previous belief {sigma[h-1][hist[0:-2]].shape}")
 '''
 
-
 beta_hat=torch.ones_like(sigma_hat)
-
-
-
-
-
 
 '''
 To view how each layer evolves, run:

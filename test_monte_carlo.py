@@ -59,7 +59,6 @@ def test_MC_high_dimensional():
     iota =np.log(K*H*nS*nO*nA/delta)
     reward=initialize_reward(nS,nA,H,'random')
 
-
     # start the algorithm
     num_iter=K
 
@@ -73,16 +72,17 @@ def test_MC_high_dimensional():
     policy=initialize_policy(nO,nA,H)
 
     # (s,o,a) occurrence counters
+    ## for initial state estimation
     Ns_init=torch.zeros([nS])      # frequency of s0
-    
-    Nos=torch.zeros([H,nO,nS])     # frequency of o  given s
-    Nos_ones=torch.ones([1,nS])    # matrix of 1 of size N(s)
-    Ns=torch.ones([H,nS])          # frequency of s:                \widehat{N}_{h}(s_{h}) \vee 1
-    
+    ## for transition estimation
     Nssa=torch.zeros([H,nS,nS,nA]) # frequency of s' given (s,a)
     Nssa_ones=torch.ones([1,nS,nA])# matrix of 1 of size N(s,a) 
-    Nsa=torch.ones([H,nS,nA])      # frequency of (s,a) :           \widehat{N}_{h}(s_h,a_h) \vee 1
-
+    Nsa=torch.ones([H,nS,nA])      # frequency of (s,a) :           \widehat{N}_{h}(s_h,a_h) \vee 1  h=1,2,3,...H
+    ## for emission estimation
+    Nos=torch.zeros([H+1,nO,nS])   # frequency of o  given s
+    Nos_ones=torch.ones([1,nS])    # matrix of 1 of size N(s)
+    Ns=torch.ones([H+1,nS])        # frequency of s:                \widehat{N}_{h}(s_{h}) \vee 1    h=1,2,3,...H+1
+    
     # errors after each iteration.
     mu_err=np.zeros([num_iter])
     T_err=np.zeros([num_iter])
@@ -91,37 +91,41 @@ def test_MC_high_dimensional():
     # start to learn the dynamics.
     for k in range(num_iter):
         traj=sample_trajectory(H,policy,model=(mu,T,O))
+
         # update s0 count
         s0=traj[0][0]
         Ns_init[s0]+=1
+        # update s,a ->s' pairs count.
         for h in range(H):
-            # update s->o pairs count.
-            s,o=traj[0,h], traj[1,h]
-            Nos[h][o][s]+=1
-        for h in range(H-1):
-            # update s,a ->s' pairs count.
             s,a,ss=traj[0,h], traj[2,h], traj[0,h+1]
             Nssa[h][ss][s][a]+=1
-        # update empirical initial distribution.
+        # update s->o pairs count.
+        for h in range(H+1):
+            s,o=traj[0,h], traj[1,h]
+            Nos[h][o][s]+=1
+        
+        # update empirical initial distribution. \widehat{\mu}_1
         mu_hat=Ns_init/sum(Ns_init)
-        # update empirical observation matrix.
+        # update empirical transition kernels.   \widehat{\mathbb{T}}^k_{h}: h=1,2,...H
         for h in range(H):
-            #print(f"size: Nos[h]={Nos[h].shape}, ones={Nos_ones.shape}, sum={torch.sum(Nos[h],dim=0,keepdim=True).shape}")
-            Ns[h]=(torch.max(Nos_ones, torch.sum(Nos[h],dim=0,keepdim=True)))
-            O_hat[h]=Nos[h]/Ns[h]
-        # update empirical transition.  The last transition is an absorbing state 0.
-        for h in range(H-1):
             #print(f"size: Nssa[h]={Nssa[h].shape}, ones={Nssa_ones.shape}, sum={torch.sum(Nssa[h],dim=0,keepdim=True).shape}")
             Nsa[h]=(torch.max(Nssa_ones, torch.sum(Nssa[h],dim=0,keepdim=True)))
             T_hat[h]=Nssa[h]/Nsa[h]
-        for s in range(nS):
-            for a in range(nA):
-                T_hat[H-1][:,s,a]=torch.eye(nS)[0]
+        # update empirical observation matrix.   \widehat{\mathbb{O}}^k_{h}: h=1,2,...H,H+1
+        for h in range(H+1):
+            #print(f"size: Nos[h]={Nos[h].shape}, ones={Nos_ones.shape}, sum={torch.sum(Nos[h],dim=0,keepdim=True).shape}")
+            Ns[h]=(torch.max(Nos_ones, torch.sum(Nos[h],dim=0,keepdim=True)))
+            O_hat[h]=Nos[h]/Ns[h]
         # compute the average Frobenius error until this iter.
         mu_err[k]=torch.linalg.norm(mu-mu_hat)/mu.numel()
         T_err[k]=torch.linalg.norm(T-T_hat)/T.numel()
         O_err[k]=torch.linalg.norm(O-O_hat)/O.numel()
 
+    #print(f"T.shape={T.shape}, T_hat.shape={T_hat.shape}")
+
+    #norms=[ torch.linalg.norm(T[h]-T_hat[h])/T[h].numel() for h in range(H)]
+    #plt.plot(norms)
+    #plt.show()
     log_output(mu_err,T_err,O_err, H)
     
 def log_output(mu_err,T_err,O_err, H:int)->None:
@@ -138,12 +142,12 @@ def log_output(mu_err,T_err,O_err, H:int)->None:
         print(f"read in {loss_curve.shape[0]} items from File:{'log.txt'}" )
         indices=np.arange(loss_curve.shape[0])*H
         labels_plt=['Initial distribution $\mu(\cdot)$',\
-                    'Transition matrices $\{\mathbb{T}_h(\cdot|s,a)\}_{h=1}^{H}$',\
-                        'Emission matrices $\{\mathbb{O}_h(\cdot|s)\}_{h}^{H}$']
+                    'Transition matrices $\{\mathbb{T}_h(\cdot|s,a)\}_{h=1}^{H+1}$',\
+                        'Emission matrices $\{\mathbb{O}_h(\cdot|s)\}_{h=1}^{H+1}$']
         for id in range(3):
             plt.plot((indices),loss_curve[:,id],label=labels_plt[id])
         plt.title(f'Average 2-norm Error of Monte-Carlo Simulation. Horizon H={H}')
-        plt.xlabel(f'Samples N (=iteration $k$ * {H})')
+        plt.xlabel(f'Samples N (=iteration $k$ * {H})')    # H transitions per iteration.
         plt.ylabel(r'$\frac{1}{d} \| \widehat{p}^k(\cdot)-p(\cdot) \|_2$')
         plt.legend(loc='upper right', labels=labels_plt)
         plt.savefig('plots/Monte-Carlo-Estimation-Error.jpg')

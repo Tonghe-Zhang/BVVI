@@ -72,10 +72,14 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
             dist_type='uniform':   generate a uniform distribution
     returns
         tuple. a POMDP model  (mu, T, O), or (init state distributinon,  transition kernels,  emition kernels). 
-        the shapes of the kernels are specified in the comments below.
+        the shapes of the kernels:
+        mu: torch.Size([nS])
+        T : torch.Size([horizon,nS,nS,nA])
+        O : torch.Size([horizon+1,nO,nS])
     remark
         The distributions are initialized as a randomly picked distribution, with the only constraint is that the distribution add up to 1.00
     '''
+
 
     '''
     initial distribution
@@ -85,32 +89,30 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
     initialization: random distribution. 
     '''
     init_dist=torch.tensor(get_random_dist(dim=nS,dist_type=init_type))
-
-    '''
-    emission matrices
-    name:emit_kernel
-    shape: torch.Size([horizon,nO,nS])
-    access: emit_kernel[h][:,s] is the distribution of \mathbb{O}_{h}(\cdot|s) \in \Delta(\mathcal{O})
-    normalization: sum(emit_kernel[h][:,s])=tensor(1.0000, dtype=torch.float64)
-    initialization: random distribution. 
-    '''
-    #emit_kernel=torch.transpose(torch.tensor([[get_random_dist(nO) for _ in range(nS)] for _ in range(horizon)]),1,2)
-    emit_kernel=torch.transpose(torch.tensor(np.array([np.array([get_random_dist(dim=nO,dist_type=init_type) for _ in range(nS)])for _ in range(horizon)])),1,2)
+    
+    
     '''
     transition matrices
     name:trans_kernel
     shape: torch.Size([horizon,nS,nS,nA])
-    access: trans_kernel[h][:,s,a] is the distribution of \mathbb{T}_{h}(\cdot|s,a) \in \Delta(\mathcal{S})
+    access: trans_kernel[h][:,s,a] is the distribution of \mathbb{T}_{h}(\cdot|s,a) \in \Delta(\mathcal{S})    for h =1,2,...H
     normalization: sum(trans_kernel[h][:,s,a])=tensor(1.0000, dtype=torch.float64)
     initialization: random distribution.
     notice: we will not collect s_{H+1}, but set T_{H}(\cdot|sH,aH) as \delta(s_{H+1}-0), i.e. the H+1-th state is an absorbing state 0.
     '''
     #trans_kernel=torch.transpose(torch.tensor( [ [ [get_random_dist(dim=nS) for s in range(10)] for a in range(20) ] for h in range(30) ]  ),1,3)
     trans_kernel=torch.transpose(torch.tensor( np.array([ np.array([ np.array([get_random_dist(dim=nS,dist_type=init_type) for s in range(nS)]) for a in range(nA) ]) for h in range(horizon) ])  ),1,3)
-    # The last state H+1 is an absorbing state to state 0. It will not be sampled.
-    for s in range(nS):
-        for a in range(nA):
-            trans_kernel[horizon-1][:,s,a]=torch.eye(nS)[0]
+
+    '''
+    emission matrices
+    name:emit_kernel
+    shape: torch.Size([horizon+1,nO,nS])
+    access: emit_kernel[h][:,s] is the distribution of \mathbb{O}_{h}(\cdot|s) \in \Delta(\mathcal{O})
+    normalization: sum(emit_kernel[h][:,s])=tensor(1.0000, dtype=torch.float64)
+    initialization: random distribution. 
+    '''
+    #emit_kernel=torch.transpose(torch.tensor([[get_random_dist(nO) for _ in range(nS)] for _ in range(horizon+1)]),1,2)
+    emit_kernel=torch.transpose(torch.tensor(np.array([np.array([get_random_dist(dim=nO,dist_type=init_type) for _ in range(nS)])for _ in range(horizon+1)])),1,2)
     
     return (init_dist.to(torch.float64),trans_kernel.to(torch.float64),emit_kernel.to(torch.float64))
 
@@ -118,36 +120,37 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
 def sample_trajectory(horizon:int,policy,model):
     '''
     sample a trajectory from a policy and a POMDP model with given horizon length.
-    return a 3xH integer list 'full_traj' of the form: 
+    return a 3x(H+1) integer list 'full_traj' of the form: 
 
      s0 s1 s2 ... sH   sh=full_traj[0][h]
      o0 o1 o2 ... oH   oh=full_traj[1][h]
-     a0 a1 a2 ... aH   ah=full_traj[2][h]  
+     a0 a1 a2 ... -1    ah=full_traj[2][h]  
     '''
 
     init_dist, trans_kernel, emit_kernel =model
     
-    # integer list of size 3xH
-    full_traj=np.zeros((3,horizon), dtype=int)    #torch.zeros([3,horizon])
+    # integer list of size 3x(H+1)   we will not sample the last action which is in fact out of horizon. AH+1 or a[H] will be denoted as -1.
+    full_traj=np.ones((3,horizon+1), dtype=int)*(-1)   
 
     # S_0
     full_traj[0][0]=sample_from(init_dist)
     # A single step of interactions
-    for h in range(horizon):
+    for h in range(horizon+1):
         state=full_traj[0][h]
         # O_h \sim \mathbb{O}_h(\cdot|s_h)
         observation=sample_from(emit_kernel[h][:,state])
         full_traj[1][h]=observation
-        # A_h \sim \pi_h(\cdot |f_h)
-        action=action_from_policy(full_traj[1:3,:],h,policy,horizon)
-        full_traj[2][h]=action
-        # S_h \sim \mathbb{T}_h(\cdot|s_h,a_h)
-        new_state=sample_from(trans_kernel[h][:,state,action])
+        # A_h \sim \pi_h(\cdot |f_h). We do not collect A_{H+1}, which is a[H]. We set a[H] as 0
+        if h<horizon:
+            action=action_from_policy(full_traj[1:3,:],h,policy,horizon)
+            full_traj[2][h]=action
+        # S_h \sim \mathbb{T}_{h}(\cdot|s_{h},a_{h})
+        if h<horizon:
+            new_state=sample_from(trans_kernel[h][:,state,action])
         # do not record s_{H+1}
-        if h is not horizon-1:
+        if h <horizon:
             full_traj[0][h+1]=new_state
     return full_traj
-
 
 def initialize_policy(nO:int,nA:int,H:int):
     '''
@@ -229,4 +232,4 @@ def test_sampling():
     
     show_trajectory(traj)
 
-#test_sampling()
+test_sampling()
