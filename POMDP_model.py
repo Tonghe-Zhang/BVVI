@@ -72,7 +72,8 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
             dist_type='random':   generate a random distribution that normalize to one
             dist_type='uniform':   generate a uniform distribution
     returns
-        tuple. a POMDP model  (mu, T, O), or (init state distributinon,  transition kernels,  emition kernels). 
+        a tuple of three tensors. 
+        the POMDP model  (mu, T, O), or (init state distributinon,  transition kernels,  emition kernels). 
         the shapes of the kernels:
         mu: torch.Size([nS])
         T : torch.Size([horizon,nS,nS,nA])

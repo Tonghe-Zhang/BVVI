@@ -18,7 +18,7 @@ def current_time_str()->str:
     import datetime
     return str(datetime.datetime.now())[:-7].replace(' ', '-').replace(':', '-')
 # load hyper parameters from a yaml file.
-def load_param(hyper_param_file_name:str)->tuple:
+def load_hyper_param(hyper_param_file_name:str)->tuple:
     ''''
     given hyper parameter file name, return the params.   
     
@@ -42,6 +42,7 @@ def log_output_param_error(mu_err,T_err,O_err, H:int)->None:
     write and read Monte-Carlo erros and plot three curves on a graph. 
     '''
     with open('log.txt',mode='w') as log_file:
+        log_file.write(f"\n\nTest BVVI. Current time={current_time_str()}")
         param_error=np.column_stack((mu_err,T_err,O_err))
         np.savetxt('log.txt',param_error)
         log_file.close()
@@ -64,21 +65,20 @@ def log_output_param_error(mu_err,T_err,O_err, H:int)->None:
 
 def log_output_tested_rewards(accumulated_rewards_of_each_episode:np.array,H:int)->None:
     loss_curve=accumulated_rewards_of_each_episode
-    indices=np.arange(loss_curve.shape[0])*H
-    labels_plt=['Average Accumulated Rewards']
+    indices=np.arange(loss_curve.shape[0])  #*H
+    labels_plt=['BVVI(ours)']
     # replace with these lines when we have multiple curves.
     # for id in range(3):
     #     plt.plot((indices),loss_curve[id],label=labels_plt[id])
     plt.plot((indices), loss_curve) #, labels_plt
 
     plt.title(f'Average Accumulated Rewards of Output Policies. Horizon H={H}')
-    plt.xlabel(f'Samples N (=iteration $k$ * {H})')    # H transitions per iteration.
-    plt.ylabel(r'$\sum_{h=1}^{H}r_h(\mathbf{S}_h,\mathbf{A}_h)$')
+    plt.xlabel(f'Episode $k$')    # H transitions per iteration.   Samples N (=iteration $K$ * {H})
+    plt.ylabel(f'Average Accumulated Rewards')         # $\sum_{h=1}^{H}r_h(\mathbf{S}_h,\mathbf{A}_h)$
     
     plt.legend(loc='upper right', labels=labels_plt)
     plt.savefig('plots/Reward'+current_time_str()+'.jpg')
     plt.show()
-    
 
 def init_history_space(H:int, nO:int, nA:int)->list:
     '''
@@ -229,6 +229,42 @@ class Logger(object):
         # this handles the flush command by doing nothing.
         # you might want to specify some extra behavior here.
         pass    
+
+def save_model_rewards(kernels, reward_table, parent_directory):
+    mu, T, O =kernels
+    torch.save(mu,parent_directory+'\mu.pt')
+    torch.save(T,parent_directory+'\T.pt')
+    torch.save(O,parent_directory+'\O.pt')
+    torch.save(reward_table,parent_directory+'\R.pt')
+
+def load_model_rewards(parent_directory)->tuple:
+    mu=torch.load(parent_directory+'\mu.pt')
+    T=torch.load(parent_directory+'\T.pt')
+    O=torch.load(parent_directory+'\O.pt')
+    reward_table=torch.load(parent_directory+'\R.pt')
+    kernels=(mu, T, O)
+    return (kernels, reward_table)
+
+def save_model_policy(kernels, policy, parent_directory):
+    mu, T, O =kernels
+    torch.save(mu,parent_directory+'\mu.pt')
+    torch.save(T,parent_directory+'\T.pt')
+    torch.save(O,parent_directory+'\O.pt')
+
+    policy_dict={id:len for id, len in enumerate(policy)}
+    torch.save(policy_dict,parent_directory+'\Policy.pt')
+
+def load_model_policy(parent_directory):
+    mu=torch.load(parent_directory+'\mu.pt')
+    T=torch.load(parent_directory+'\T.pt')
+    O=torch.load(parent_directory+'\O.pt')
+    kernels=(mu, T, O)
+
+    policy_dict = torch.load(parent_directory+'\Policy.pt')
+    policy=[policy_dict[id] for id in range(len(policy_dict))]
+    return (kernels, policy)
+
+
 
 
 # test_log_output()

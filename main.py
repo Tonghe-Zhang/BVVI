@@ -10,20 +10,27 @@ import time
 # load the RL platform
 from POMDP_model import initialize_model, initialize_policy, initialize_reward, sample_trajectory, get_random_dist, sample_from
 
-from func import negative_func, positive_func, log_output_param_error, log_output_tested_rewards, load_param, init_value_representation, init_history_space, init_occurrence_counters
+from func import negative_func, positive_func, log_output_param_error, log_output_tested_rewards, load_hyper_param, init_value_representation, init_history_space, init_occurrence_counters
 
 from func import test_normalization, test_output_log_file, current_time_str, Logger
 
-
+from func import save_model_rewards, load_model_rewards, save_model_policy, load_model_policy
 
 # load hyper parameters
-nS,nO,nA,H,K,nF,delta,gamma,iota = load_param("hyper_param.yaml")
+nS,nO,nA,H,K,nF,delta,gamma,iota = load_hyper_param("hyper_param.yaml")
 
 # obtain the true environment. invisible for the agent. Immutable. Only used during sampling.
 real_env_kernels=initialize_model(nS,nO,nA,H,init_type='random')
 
 # initiliaze the reward
 reward_fix=initialize_reward(nS,nA,H,'random')
+
+# record the generated kernels and rewards.
+save_model_rewards(real_env_kernels, reward_fix, 'real_env')
+
+# load_model, load_reward=load_model_rewards('real_env')
+
+# learnt_kernel, learnt_policy=load_model_policy('learnt')
 
 # Training 
 prt_progress=True
@@ -44,7 +51,6 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
     '''
     # used only during sampling.
     mu,T,O=model_true
-    print(f"mu={mu},normalization={sum(mu)==1}")
 
     # used only during evaluation
     mu_err, T_err, O_err, tested_returns=evaluation_metrics
@@ -217,11 +223,15 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
         mu_err[k]=torch.linalg.norm(mu-mu_hat)/mu.numel()
         T_err[k]=torch.linalg.norm(T-T_hat)/T.numel()
         O_err[k]=torch.linalg.norm(O-O_hat)/O.numel()
-        # logging into log_episode_file after each episode.
+        # [Logging]logging into log_episode_file after each episode.
         if prt_progress:
             print(f"\tEnd of episode {k}. policy's tested_returns[{k}]={tested_returns[k]}, mu_err[{k}]={mu_err[k]}, T_err[{k}]={T_err[k]}, O_err[{k}]={O_err[k]}")
         write_str=str(tested_returns[k])+'\t'+str(mu_err[k])+'\t'+str(T_err[k])+'\t'+str(O_err[k])+'\t'
         log_episode_file.write(write_str+ "\n")
+        # [Save weights] record the latest learnt parameters and policy:
+        save_model_policy((mu_hat, T_hat, O_hat), policy_learnt, 'learnt')
+        if prt_progress:
+            print(f"\tSuccessfuly saved newest kernels and policies to folder: {'./learnt'}")
     # %%%%%% End of training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if prt_progress:
         print(f"End of training. number of iters K={K}")
@@ -241,7 +251,7 @@ def visualize_performance(evaluation_results):
 
 def main(output_to_log_file=False):
     if output_to_log_file:
-        print(f"Will output log information to file:{'console_output.log'}")
+        print(f"Will output log information to both the file:{'console_output.log'} and the console.")
         old_stdout = sys.stdout
         log_file = open("console_output.log","w")
         sys.stdout = Logger() #sys.stdout = log_file
@@ -259,11 +269,13 @@ def main(output_to_log_file=False):
     print('Call function \'  beta_vector_value_iteration...\' ')
 
     with open('log_episode.txt',mode='r+') as log_episode_file:
+        log_episode_file.write(f"\n\nTest BVVI. Current time={current_time_str()}")
         (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(model_true=real_env_kernels,reward=reward_fix,evaluation_metrics=evaluation_metrics, log_episode_file=log_episode_file)
+        log_episode_file.write(f"\n\nEnd Testing BVVI. Current time={current_time_str()}")
         log_episode_file.close()
     episode_data=np.loadtxt('log_episode.txt', dtype=np.float64)
-
     print('\'  beta_vector_value_iteration...\' returned.')
+    print(f"End BVVI test. Current time={current_time_str()}")
     print('%'*100)
     print('Call function \'  visualize_performance...\' ')
 
@@ -273,10 +285,10 @@ def main(output_to_log_file=False):
     print('%'*100)
     print('Beta Vector Value Iteration test complete.')
     print('%'*100)
+    
     if output_to_log_file is True:
         sys.stdout = old_stdout
         log_file.close()
-
 
 main(output_to_log_file=True) #False, then print logging info to console.s
 
@@ -290,5 +302,4 @@ while True:
     with open("console_output.log",mode='r') as log_console_file:
         print(log_console_file.read())
     time.sleep(10)
-
 '''
