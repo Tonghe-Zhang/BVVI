@@ -323,7 +323,7 @@ with open('log\log_episode_naive.txt',mode='r+') as log_episode_file:
         content=hyp_file.read()
     print(content)
     print('%'*100)
-    print('Call function \'  beta_vector_value_iteration...\' ')
+    print('Call function beta_vector_value_iteration...')
 
     with open('log\\'+log_episode_filename+'.txt',mode='r+') as log_episode_file:
         # log_episode_file.write(f"\n\nTest BVVI. Current time={current_time_str()}")
@@ -346,14 +346,14 @@ with open('log\log_episode_naive.txt',mode='r+') as log_episode_file:
         # log_episode_file.write(f"\n\nEnd Testing BVVI. Current time={current_time_str()}")
         log_episode_file.close()
     episode_data=np.loadtxt('log\\'+log_episode_filename+'.txt', dtype=np.float64)
-    print('\'  beta_vector_value_iteration...\' returned.')
+    print('beta_vector_value_iteration...returned.')
     print(f"End BVVI test. Current time={current_time_str()}")
     print('%'*100)
-    print('Call function \'  visualize_performance...\' ')
+    print('Call function visualize_performance...')
 
     visualize_performance(evaluation_results)
 
-    print('\'  visualize_performance...\' returned.')
+    print('visualize_performance...returned.')
     print('%'*100)
     print('Beta Vector Value Iteration test complete.')
     print('%'*100)
