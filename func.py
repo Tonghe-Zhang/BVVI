@@ -7,11 +7,15 @@ import yaml
 import torch
 
 # (x)^+ and (x)^- functions.
-def negative_func(x:np.double)->np.double:
+def negative_func(x:np.float64)->np.float64:
     return np.min(x,0)
-def positive_func(x:np.double)->np.double:
+def positive_func(x:np.float64)->np.float64:
     return np.max(x,0)
 
+# obtain current time as a python string
+def current_time_str()->str:
+    import datetime
+    return str(datetime.datetime.now())[:-7].replace(' ', '-').replace(':', '-')
 # load hyper parameters from a yaml file.
 def load_param(hyper_param_file_name:str)->tuple:
     ''''
@@ -54,25 +58,26 @@ def log_output_param_error(mu_err,T_err,O_err, H:int)->None:
         plt.xlabel(f'Samples N (=iteration $k$ * {H})')    # H transitions per iteration.
         plt.ylabel(r'$\frac{1}{d} \| \widehat{p}^k(\cdot)-p(\cdot) \|_2$')
         plt.legend(loc='upper right', labels=labels_plt)
-        plt.savefig('plots/MCErr'+str(datetime.datetime.now())[:-7]+'.jpg')
+        plt.savefig('plots/MCErr'+current_time_str()+'.jpg')
         plt.show()
 
-def log_output_tested_rewards(accumulated_rewards_of_each_episode,H:int)->None:
+def log_output_tested_rewards(accumulated_rewards_of_each_episode:np.array,H:int)->None:
     loss_curve=accumulated_rewards_of_each_episode
     indices=np.arange(loss_curve.shape[0])*H
     labels_plt=['Average Accumulated Rewards']
-    for id in range(3):
-        plt.plot((indices),loss_curve[:,id],label=labels_plt[id])
+    # replace with these lines when we have multiple curves.
+    # for id in range(3):
+    #     plt.plot((indices),loss_curve[id],label=labels_plt[id])
+    plt.plot((indices), loss_curve) #, labels_plt
+
     plt.title(f'Average Accumulated Rewards of Output Policies. Horizon H={H}')
     plt.xlabel(f'Samples N (=iteration $k$ * {H})')    # H transitions per iteration.
-    plt.ylabel(r'$sum_{h=1}^{H}r_h(\boldsymbol{S}_h,\boldsymbol{A}_h)$')
+    plt.ylabel(r'$\sum_{h=1}^{H}r_h(\mathbf{S}_h,\mathbf{A}_h)$')
+    
     plt.legend(loc='upper right', labels=labels_plt)
-    plt.savefig('plots/Reward'+str(datetime.datetime.now())[:-7]+'.jpg')
+    plt.savefig('plots/Reward'+current_time_str()+'.jpg')
     plt.show()
-
-
-
-
+    
 
 def init_history_space(H:int, nO:int, nA:int)->list:
     '''
@@ -149,3 +154,32 @@ def init_occurrence_counters(H:int, nS:int, nO:int, nA:int)->tuple:
     Nos_ones=torch.ones([1,nS])    # matrix of 1 of size N(s)
     Ns=torch.ones([H+1,nS])        # frequency of s:                \widehat{N}_{h}(s_{h}) \vee 1    h=1,2,3,...H+1
     return (Ns_init, Nssa, Nssa_ones, Nsa, Nos, Nos_ones, Ns)
+
+
+def test_normalization(policy_test:list, size_obs:int, size_act:int)->bool:
+    '''
+    input policy
+    output whether this policy is normalized
+    '''
+    import itertools
+    normalized_flag=True
+    horizon_len=len(policy_test)
+    history_space=init_history_space(horizon_len,nO=size_obs,nA=size_act)
+    for h in range(horizon_len):
+        # retrieve the policy tensor at step h
+        policy_step=policy_test[h]
+        # traverse all history coordinates
+        history_coordinates=list(itertools.product(*history_space[h]))
+        for hist in history_coordinates:
+            action_distribution=policy_step[hist]
+            if torch.sum(action_distribution).item()!=1:
+                normalized_flag=False
+                raise(ValueError)
+                return normalized_flag
+    return True
+
+
+def test_log_output():
+    log_output_tested_rewards(accumulated_rewards_of_each_episode=np.array([1,3,2,4,7]), H=5)
+
+# test_log_output()

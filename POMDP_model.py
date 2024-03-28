@@ -32,7 +32,7 @@ def sample_from(dist)->int:
     '''
     generate one sample from a given distribution 'dist'.
     '''
-    return int(np.random.choice(a=list(np.arange(len(dist))), size=1, p=dist))
+    return int(np.random.choice(a=list(np.arange(len(dist))), size=1, p=(dist)))
 
 def initialize_reward(nS:int, nA:int, H:int, init_type:str)->torch.Tensor:
     '''
@@ -241,7 +241,9 @@ def action_from_policy(raw_history:tuple,h:int,policy)->int:
     # retrieve \pi_h(\cdot|f_h)   policy[h][history] .shape=torch.Size([nA])
     action_distribution=policy[h][history] 
 
-    print(f"h={h}, action_distribution={action_distribution}, shape={action_distribution.shape}")
+    '''console debug output:
+    #print(f"h={h}, action_distribution={action_distribution}, shape={action_distribution.shape}")
+    '''
 
     # a_h \sim \pi_h(\cdot|f_h)
     action = sample_from(action_distribution)
@@ -299,6 +301,6 @@ def test_policy():
     for h in range(H):
         print(f"@ h={h}, policy[{h}].shape={policy[h].shape}")
 
-# test_sampling()
+test_sampling()
 
 # test_policy()

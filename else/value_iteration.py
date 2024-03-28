@@ -9,9 +9,9 @@ import itertools
 from POMDP_model import initialize_model, initialize_policy, initialize_reward, sample_trajectory
 
 # (x)^+ and (x)^- functions.
-def negative_func(x:np.double)->np.double:
+def negative_func(x:np.float64)->np.float64:
     return np.min(x,0)
-def positive_func(x:np.double)->np.double:
+def positive_func(x:np.float64)->np.float64:
     return np.max(x,0)
 
 # load hyper parameters from a yaml file.
@@ -139,7 +139,7 @@ for k in range(K):
             prev_hist, act, obs=hist[0:-2], hist[-2], hist[-1]   
             # use Eqs.~\eqref{40} in the original paper to simplify the update rule.
             # be aware that we should use @ but not * !!!   * is Hadamard product while @ is matrix/vector product.
-            sigma_hat[h][hist]=np.double(nO)*torch.diag(O_hat[h][obs,:]).to(dtype=torch.float64) @ T_hat[h-1,:,:,act]  @  torch.diag(torch.exp(gamma* reward[h-1,:,act])).to(dtype=torch.float64) @ sigma_hat[h-1][prev_hist]
+            sigma_hat[h][hist]=np.float64(nO)*torch.diag(O_hat[h][obs,:]).to(dtype=torch.float64) @ T_hat[h-1,:,:,act]  @  torch.diag(torch.exp(gamma* reward[h-1,:,act])).to(dtype=torch.float64) @ sigma_hat[h-1][prev_hist]
     # line 11 of the original paper
     bonus_res_t=torch.min(torch.ones([H,nS,nA]), 3*torch.sqrt(nS*H*iota / Nsa))
     bonus_res_o=torch.min(torch.ones([H+1,nS]), 3*torch.sqrt(nO*H*iota/Ns))

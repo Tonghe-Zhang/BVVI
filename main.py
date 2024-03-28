@@ -11,6 +11,10 @@ from POMDP_model import initialize_model, initialize_policy, initialize_reward, 
 
 from func import negative_func, positive_func, log_output_param_error, log_output_tested_rewards, load_param, init_value_representation, init_history_space, init_occurrence_counters
 
+from func import test_normalization
+
+
+
 # load hyper parameters
 nS,nO,nA,H,K,nF,delta,gamma,iota = load_param("hyper_param.yaml")
 
@@ -22,6 +26,7 @@ reward_fix=initialize_reward(nS,nA,H,'random')
 
 # Training 
 prt_progress=True
+prt_policy_normalization=True
 
 # [Evaluation] Reset the parameter errors and accumulated returns tested in the true envirnoemt of each iteration.
 mu_err=np.zeros([K])
@@ -30,13 +35,16 @@ O_err=np.zeros([K])
 tested_returns=np.zeros([K])
 evaluation_metrics=(mu_err, T_err, O_err, tested_returns)
 
-def beta_vector_value_iteration(model_true, reward, evaluation_metrics)->tuple:
+
+def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episode_file)->tuple:
     '''
     inputs: as the name suggests.
     output: policy, model_learnt, evaluation results
     '''
     # used only during sampling.
     mu,T,O=model_true
+    print(f"mu={mu},normalization={sum(mu)==1}")
+
     # used only during evaluation
     mu_err, T_err, O_err, tested_returns=evaluation_metrics
 
@@ -47,6 +55,9 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics)->tuple:
 
     # initialize the policy
     policy_learnt=initialize_policy(nO,nA,H)
+
+    if prt_policy_normalization:
+        print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_normalization(policy_test=policy_learnt,size_act=nA,size_obs=nO)}")
 
     # Bonus residues, correspond to \mathsf{t}_h^k(\cdot,\cdot)  and  \mathsf{o}_{h+1}^k(s_{h+1})
     bonus_res_t=torch.ones([H,nS,nA]).to(torch.float64)
@@ -69,8 +80,7 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics)->tuple:
     # %%%%%% Start of training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     for k in range(K):
         if prt_progress:
-            print(f"Into episode {k}/{K}={(k/K*100):.2f}%")
-        
+            print(f"\n\n\tInto episode {k}/{K}={(k/K*100):.2f}%")
         # %%%%%%% Belief propagation  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         if prt_progress:
             print(f"\t\t belief propagation starts...")
@@ -85,7 +95,7 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics)->tuple:
                 prev_hist, act, obs=hist[0:-2], hist[-2], hist[-1]   
                 # use Eqs.~\eqref{40} in the original paper to simplify the update rule.
                 # be aware that we should use @ but not * !!!   * is Hadamard product while @ is matrix/vector product.
-                sigma_hat[h][hist]=np.double(nO)*torch.diag(O_hat[h][obs,:]).to(dtype=torch.float64) @ T_hat[h-1,:,:,act]  @  torch.diag(torch.exp(gamma* reward[h-1,:,act])).to(dtype=torch.float64) @ sigma_hat[h-1][prev_hist]
+                sigma_hat[h][hist]=np.float64(nO)*torch.diag(O_hat[h][obs,:]).to(dtype=torch.float64) @ T_hat[h-1,:,:,act].to(dtype=torch.float64)  @  torch.diag(torch.exp(gamma* reward[h-1,:,act])).to(dtype=torch.float64) @ sigma_hat[h-1][prev_hist].to(dtype=torch.float64)
         # line 11 of the original paper
         bonus_res_t=torch.min(torch.ones([H,nS,nA]), 3*torch.sqrt(nS*H*iota / Nsa))
         bonus_res_o=torch.min(torch.ones([H+1,nS]), 3*torch.sqrt(nO*H*iota/Ns))
@@ -94,7 +104,7 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics)->tuple:
         for h in range(H):
             bonus[h]=np.fabs(np.exp(gamma*(H-h))-1)*\
                 torch.min(torch.ones([nS,nA]), \
-                    bonus_res_t[h]+torch.tensordot(bonus_res_o[h+1].to(torch.float64), T_hat[h], dims=1))
+                    bonus_res_t[h]+torch.tensordot(bonus_res_o[h+1].to(torch.float64), T_hat[h].to(torch.float64), dims=1))
         if prt_progress:
             print(f"\t\t belief propagation ends...") 
 
@@ -132,8 +142,13 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics)->tuple:
 
             # select greedy action for the policy. The policy is one-hot in the last dimension.
             print(f"\t\t\t update greedy policy...")
-            max_indices=torch.argmax(Q_function[h],dim=-1,keepdim=True)
-            policy_learnt[h]=torch.zeros_like(policy_learnt[h]).scatter(dim=-1,index=max_indices,src=Q_function[h])
+            max_indices=torch.argmax(Q_function[h],dim=-1,keepdim=True)   # good thing about argmax: only return 1 value when there are multiple maxes. 
+            policy_shape=policy_learnt[h].shape
+            policy_learnt[h]=torch.zeros(policy_shape).scatter(dim=-1,index=max_indices,src=torch.ones(policy_shape))
+            if prt_policy_normalization:
+                print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_normalization(policy_test=policy_learnt,size_act=nA,size_obs=nO)}")
+            '''      
+            '''
 
             # action_greedy is \widehat{\pi}_h^k(f_h)
             action_greedy=torch.argmax(policy_learnt[h][hist]).item()
@@ -158,13 +173,14 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics)->tuple:
                                                 np.exp(gamma_minus*(H-h)), \
                                                     np.exp(gamma_plus*(H-h)))
             if prt_progress:
-                print(f"\t\tHorizon remains: {h}/{H}")
+                print(f"\t\t\t Horizon remains: {h}/{H}")
 
         # %%%%%% Parameter Learning %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         if prt_progress:
-            print(f"Enter parameter learning")
-
+            print(f"\t\tEnter parameter learning")
         # line 29-30 in the original paper. Interact with the environment and sample a trajectory.
+        if prt_policy_normalization:
+            print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_normalization(policy_test=policy_learnt,size_act=nA,size_obs=nO)}")
         traj=sample_trajectory(H,policy_learnt,model=(mu,T,O),reward=reward,output_reward=False)
 
         # line 34 in the orignal paper.
@@ -200,9 +216,11 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics)->tuple:
         mu_err[k]=torch.linalg.norm(mu-mu_hat)/mu.numel()
         T_err[k]=torch.linalg.norm(T-T_hat)/T.numel()
         O_err[k]=torch.linalg.norm(O-O_hat)/O.numel()
-        # log
+        # logging into log_episode_file after each episode.
         if prt_progress:
-            print(f"tested_returns[{k}]={tested_returns[k]}, mu_err[{k}]={mu_err[k]}, T_err[{k}]={T_err[k]}, O_err[{k}]={O_err[k]}")
+            print(f"\tEnd of episode {k}. policy's tested_returns[{k}]={tested_returns[k]}, mu_err[{k}]={mu_err[k]}, T_err[{k}]={T_err[k]}, O_err[{k}]={O_err[k]}")
+        write_str=str(tested_returns[k])+'\t'+str(mu_err[k])+'\t'+str(T_err[k])+'\t'+str(O_err[k])+'\t'
+        log_episode_file.write(write_str+ "\n")
     # %%%%%% End of training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if prt_progress:
         print(f"End of training. number of iters K={K}")
@@ -221,7 +239,7 @@ def visualize_performance(evaluation_results):
     log_output_param_error(mu_err,T_err,O_err, H)
 
 def main(output_to_log_file=False):
-    if output_to_log_file:   
+    if output_to_log_file:
         old_stdout = sys.stdout
         log_file = open("console_output.log","w")
         sys.stdout = log_file
@@ -234,7 +252,10 @@ def main(output_to_log_file=False):
     print(content)
     print('%'*100)
     print('Call function \'  beta_vector_value_iteration...\' ')
-    (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(model_true=real_env_kernels,reward=reward_fix,evaluation_metrics=evaluation_metrics)
+    with open('log_episode.txt',mode='r+') as log_episode_file:
+        (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(model_true=real_env_kernels,reward=reward_fix,evaluation_metrics=evaluation_metrics, log_episode_file=log_episode_file)
+        log_episode_file.close()
+    episode_data=np.loadtxt('log_episode.txt', dtype=np.float64)
     print('\'  beta_vector_value_iteration...\' returned.')
     print('%'*100)
     print('Call function \'  visualize_performance...\' ')
@@ -247,4 +268,4 @@ def main(output_to_log_file=False):
         sys.stdout = old_stdout
         log_file.close()
 
-main(output_to_log_file=True)
+main(output_to_log_file=True) #False, then print logging info to console.s

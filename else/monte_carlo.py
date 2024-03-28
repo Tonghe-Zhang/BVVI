@@ -151,12 +151,10 @@ def log_output(mu_err,T_err,O_err, H:int)->None:
         plt.xlabel(f'Samples N (=iteration $k$ * {H})')    # H transitions per iteration.
         plt.ylabel(r'$\frac{1}{d} \| \widehat{p}^k(\cdot)-p(\cdot) \|_2$')
         plt.legend(loc='upper right', labels=labels_plt)
-        plt.savefig('plots/Monte-Carlo-Estimation-Error.jpg')
+        import datetime
+        current_time_str=(datetime.datetime.now())[:-7].replace(' ', '-').replace(':', '-')
+        plt.savefig('plots/Monte-Carlo-Estimation-Error'+current_time_str+'.jpg')
         plt.show()
 
 
-
-
-
-
-# test_MC_high_dimensional()
+test_MC_high_dimensional()
