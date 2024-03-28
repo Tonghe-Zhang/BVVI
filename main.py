@@ -28,10 +28,6 @@ reward_fix=initialize_reward(nS,nA,H,'random')
 # record the generated kernels and rewards.
 save_model_rewards(real_env_kernels, reward_fix, 'real_env')
 
-# load_model, load_reward=load_model_rewards('real_env')
-
-# learnt_kernel, learnt_policy=load_model_policy('learnt')
-
 # Training 
 prt_progress=True
 prt_policy_normalization=True
@@ -44,7 +40,7 @@ tested_returns=np.zeros([K])
 evaluation_metrics=(mu_err, T_err, O_err, tested_returns)
 
 
-def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episode_file)->tuple:
+def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episode_file, model_load=None, policy_load=None)->tuple:
     '''
     inputs: as the name suggests.
     output: policy, model_learnt, evaluation results
@@ -56,15 +52,19 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
     mu_err, T_err, O_err, tested_returns=evaluation_metrics
 
     # %%%%%%% Initialization  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-    # Initialize the empiricl kernels with uniform distributions.
-    mu_hat, T_hat, O_hat=initialize_model(nS,nO,nA,H,init_type='uniform')
-
-    # initialize the policy
-    policy_learnt=initialize_policy(nO,nA,H)
+    if model_load==None:
+        # Initialize the empiricl kernels with uniform distributions.
+        mu_hat, T_hat, O_hat=initialize_model(nS,nO,nA,H,init_type='uniform')
+    else:
+        mu_hat, T_hat, O_hat=model_load
+    if policy_load==None:
+        # initialize the policy
+        policy_load=initialize_policy(nO,nA,H)
+    else:
+        policy_load=policy_load
 
     if prt_policy_normalization:
-        print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_normalization(policy_test=policy_learnt,size_act=nA,size_obs=nO)}")
+        print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_normalization(policy_test=policy_load,size_act=nA,size_obs=nO)}")
 
     # Bonus residues, correspond to \mathsf{t}_h^k(\cdot,\cdot)  and  \mathsf{o}_{h+1}^k(s_{h+1})
     bonus_res_t=torch.ones([H,nS,nA]).to(torch.float64)
@@ -150,15 +150,15 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
             # select greedy action for the policy. The policy is one-hot in the last dimension.
             print(f"\t\t\t update greedy policy...")
             max_indices=torch.argmax(Q_function[h],dim=-1,keepdim=True)   # good thing about argmax: only return 1 value when there are multiple maxes. 
-            policy_shape=policy_learnt[h].shape
-            policy_learnt[h]=torch.zeros(policy_shape).scatter(dim=-1,index=max_indices,src=torch.ones(policy_shape))
+            policy_shape=policy_load[h].shape
+            policy_load[h]=torch.zeros(policy_shape).scatter(dim=-1,index=max_indices,src=torch.ones(policy_shape))
             if prt_policy_normalization:
-                print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_normalization(policy_test=policy_learnt,size_act=nA,size_obs=nO)}")
+                print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_normalization(policy_test=policy_load,size_act=nA,size_obs=nO)}")
             '''      
             '''
 
             # action_greedy is \widehat{\pi}_h^k(f_h)
-            action_greedy=torch.argmax(policy_learnt[h][hist]).item()
+            action_greedy=torch.argmax(policy_load[h][hist]).item()
             
             # line 23 in the original paper.
             if prt_progress:
@@ -187,8 +187,8 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
             print(f"\t\tEnter parameter learning")
         # line 29-30 in the original paper. Interact with the environment and sample a trajectory.
         if prt_policy_normalization:
-            print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_normalization(policy_test=policy_learnt,size_act=nA,size_obs=nO)}")
-        traj=sample_trajectory(H,policy_learnt,model=(mu,T,O),reward=reward,output_reward=False)
+            print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_normalization(policy_test=policy_load,size_act=nA,size_obs=nO)}")
+        traj=sample_trajectory(H,policy_load,model=(mu,T,O),reward=reward,output_reward=False)
 
         # line 34 in the orignal paper.
         ## update s0 count
@@ -217,7 +217,7 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
 
         # %%%%%% Performance evaluation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         # [Evaluation] test policy learnt in this episode against the true environment, collect the average accumulated rewards of 10 i.i.d. tests.
-        reward_tests=[np.sum(sample_trajectory(H,policy_learnt,model_true,reward,output_reward=True)) for _ in range(10) ]
+        reward_tests=[np.sum(sample_trajectory(H,policy_load,model_true,reward,output_reward=True)) for _ in range(10) ]
         tested_returns[k]=np.mean(reward_tests)
         # [Evaluation] compute the average Frobenius error between the true and learnt parameters until this iter.
         mu_err[k]=torch.linalg.norm(mu-mu_hat)/mu.numel()
@@ -229,15 +229,15 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
         write_str=str(tested_returns[k])+'\t'+str(mu_err[k])+'\t'+str(T_err[k])+'\t'+str(O_err[k])+'\t'
         log_episode_file.write(write_str+ "\n")
         # [Save weights] record the latest learnt parameters and policy:
-        save_model_policy((mu_hat, T_hat, O_hat), policy_learnt, 'learnt')
+        save_model_policy((mu_hat, T_hat, O_hat), policy_load, 'learnt')
         if prt_progress:
             print(f"\tSuccessfuly saved newest kernels and policies to folder: {'./learnt'}")
     # %%%%%% End of training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if prt_progress:
         print(f"End of training. number of iters K={K}")
-    model_learnt=(mu_hat, T_hat, O_hat)
+    model_load=(mu_hat, T_hat, O_hat)
     evaluation_results=(mu_err,T_err,O_err,tested_returns)
-    return (policy_learnt, model_learnt, evaluation_results)
+    return (policy_load, model_load, evaluation_results)
 
 def visualize_performance(evaluation_results):
     # unpack
@@ -249,7 +249,7 @@ def visualize_performance(evaluation_results):
     # plot parameter learning results
     log_output_param_error(mu_err,T_err,O_err, H)
 
-def main(output_to_log_file=False):
+def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None, reward_true_load=None, model_load=None, policy_load=None):
     if output_to_log_file:
         print(f"Will output log information to both the file:{'console_output.log'} and the console.")
         old_stdout = sys.stdout
@@ -270,7 +270,20 @@ def main(output_to_log_file=False):
 
     with open('log_episode.txt',mode='r+') as log_episode_file:
         log_episode_file.write(f"\n\nTest BVVI. Current time={current_time_str()}")
-        (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(model_true=real_env_kernels,reward=reward_fix,evaluation_metrics=evaluation_metrics, log_episode_file=log_episode_file)
+        if train_from_scratch:
+            (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(\
+                model_true=real_env_kernels,\
+                    reward=reward_fix,\
+                        evaluation_metrics=evaluation_metrics,\
+                            log_episode_file=log_episode_file)
+        else:
+            (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(\
+                model_true=model_true_load,\
+                    reward=reward_true_load,\
+                        model_load=model_load,\
+                            policy_load=policy_load,
+                                evaluation_metrics=evaluation_metrics,\
+                                    log_episode_file=log_episode_file)
         log_episode_file.write(f"\n\nEnd Testing BVVI. Current time={current_time_str()}")
         log_episode_file.close()
     episode_data=np.loadtxt('log_episode.txt', dtype=np.float64)
@@ -290,10 +303,41 @@ def main(output_to_log_file=False):
         sys.stdout = old_stdout
         log_file.close()
 
-main(output_to_log_file=True) #False, then print logging info to console.s
 
 
-# test_output_log_file()
+'''
+1. To load previously saved models from file, run these commands:
+
+model_true_load, reward_true_load=load_model_rewards('real_env')
+
+model_load, policy_load=load_model_policy('learnt')
+
+.....and then run this command:
+
+main(output_to_log_file=True, train_from_scratch=False, model_true_load=model_true_load, reward_true_load=reward_true_load, model_load=model_load, policy_load=policy_load)
+
+
+2. To do the job without logging too much, run:
+
+with open('log_episode_2.txt',mode='r+') as log_episode_file:
+    (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(\
+                model_true=model_true_load,\
+                    reward=reward_true_load,\
+                        model_load=model_load,\
+                            policy_load=policy_load,
+                                evaluation_metrics=evaluation_metrics,\
+                                    log_episode_file=log_episode_file)
+
+
+3. To print not to the logging file but only to the console, run:
+
+output_to_log_file=False, then print logging info to console
+
+'''
+        
+main(output_to_log_file=True, train_from_scratch=True)
+
+
 
 '''''
 # check recent update in console log file:
@@ -302,4 +346,13 @@ while True:
     with open("console_output.log",mode='r') as log_console_file:
         print(log_console_file.read())
     time.sleep(10)
+'''
+
+
+
+''''
+# Test the file
+
+test_output_log_file()
+
 '''
