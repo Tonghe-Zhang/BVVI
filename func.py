@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import yaml
 import torch
+import sys
 
 # (x)^+ and (x)^- functions.
 def negative_func(x:np.float64)->np.float64:
@@ -181,5 +182,53 @@ def test_normalization(policy_test:list, size_obs:int, size_act:int)->bool:
 
 def test_log_output():
     log_output_tested_rewards(accumulated_rewards_of_each_episode=np.array([1,3,2,4,7]), H=5)
+
+
+
+def test_output_log_file(output_to_log_file=True):
+    import sys
+    if output_to_log_file:
+        old_stdout = sys.stdout
+        log_file = open("console_output.log","w")
+        sys.stdout = log_file
+    print('%'*100)
+    print('test Beta Vector Value Iteration.')
+    print('%'*100)
+    print('hyper parameters:{}')
+    with open('hyper_param.yaml') as hyp_file:
+        content=hyp_file.read()
+    print(content)
+    print('%'*100)
+    print('Call function \'  beta_vector_value_iteration...\' ')
+    
+    print('\'  beta_vector_value_iteration...\' returned.')
+    print('%'*100)
+    print('Call function \'  visualize_performance...\' ')
+    
+    print('\'  visualize_performance...\' returned.')
+    print('%'*100)
+    print('Beta Vector Value Iteration test complete.')
+    print('%'*100)
+    if output_to_log_file is True:
+        sys.stdout = old_stdout
+        log_file.close()
+
+
+class Logger(object):
+    
+    def __init__(self):
+        self.terminal = sys.stdout
+        self.log = open("console_output.log", "a")
+   
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)  
+
+    def flush(self):
+        # this flush method is needed for python 3 compatibility.
+        # this handles the flush command by doing nothing.
+        # you might want to specify some extra behavior here.
+        pass    
+
 
 # test_log_output()

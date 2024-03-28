@@ -5,13 +5,14 @@ import yaml
 import itertools
 import matplotlib.pyplot as plt
 import sys
+import time
 
 # load the RL platform
 from POMDP_model import initialize_model, initialize_policy, initialize_reward, sample_trajectory, get_random_dist, sample_from
 
 from func import negative_func, positive_func, log_output_param_error, log_output_tested_rewards, load_param, init_value_representation, init_history_space, init_occurrence_counters
 
-from func import test_normalization
+from func import test_normalization, test_output_log_file, current_time_str, Logger
 
 
 
@@ -240,9 +241,13 @@ def visualize_performance(evaluation_results):
 
 def main(output_to_log_file=False):
     if output_to_log_file:
+        print(f"Will output log information to file:{'console_output.log'}")
         old_stdout = sys.stdout
         log_file = open("console_output.log","w")
-        sys.stdout = log_file
+        sys.stdout = Logger() #sys.stdout = log_file
+        print(f"Start BVVI test. Current time={current_time_str()}")
+        time.sleep(3)
+
     print('%'*100)
     print('test Beta Vector Value Iteration.')
     print('%'*100)
@@ -252,14 +257,18 @@ def main(output_to_log_file=False):
     print(content)
     print('%'*100)
     print('Call function \'  beta_vector_value_iteration...\' ')
+
     with open('log_episode.txt',mode='r+') as log_episode_file:
         (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(model_true=real_env_kernels,reward=reward_fix,evaluation_metrics=evaluation_metrics, log_episode_file=log_episode_file)
         log_episode_file.close()
     episode_data=np.loadtxt('log_episode.txt', dtype=np.float64)
+
     print('\'  beta_vector_value_iteration...\' returned.')
     print('%'*100)
     print('Call function \'  visualize_performance...\' ')
+
     visualize_performance(evaluation_results)
+
     print('\'  visualize_performance...\' returned.')
     print('%'*100)
     print('Beta Vector Value Iteration test complete.')
@@ -268,4 +277,18 @@ def main(output_to_log_file=False):
         sys.stdout = old_stdout
         log_file.close()
 
+
 main(output_to_log_file=True) #False, then print logging info to console.s
+
+
+# test_output_log_file()
+
+'''''
+# check recent update in console log file:
+
+while True:
+    with open("console_output.log",mode='r') as log_console_file:
+        print(log_console_file.read())
+    time.sleep(10)
+
+'''

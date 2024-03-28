@@ -301,6 +301,6 @@ def test_policy():
     for h in range(H):
         print(f"@ h={h}, policy[{h}].shape={policy[h].shape}")
 
-test_sampling()
+# test_sampling()
 
 # test_policy()
