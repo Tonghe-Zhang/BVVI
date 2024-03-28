@@ -11,12 +11,12 @@ from POMDP_model import initialize_model, initialize_policy, initialize_reward, 
 
 from func import negative_func, positive_func, log_output_param_error, log_output_tested_rewards, load_hyper_param, init_value_representation, init_history_space, init_occurrence_counters
 
-from func import test_normalization, test_output_log_file, current_time_str, Logger
+from func import test_policy_normalized, test_output_log_file, current_time_str, Logger
 
 from func import save_model_rewards, load_model_rewards, save_model_policy, load_model_policy
 
 # load hyper parameters
-nS,nO,nA,H,K,nF,delta,gamma,iota = load_hyper_param("hyper_param.yaml")
+nS,nO,nA,H,K,nF,delta,gamma,iota = load_hyper_param("config\hyper_param.yaml")
 
 # obtain the true environment. invisible for the agent. Immutable. Only used during sampling.
 real_env_kernels=initialize_model(nS,nO,nA,H,init_type='random')
@@ -63,7 +63,7 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
         policy_load=policy_load
 
     if prt_policy_normalization:
-        print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_normalization(policy_test=policy_load,size_act=nA,size_obs=nO)}")
+        print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_policy_normalized(policy_test=policy_load,size_act=nA,size_obs=nO)}")
 
     # Bonus residues, correspond to \mathsf{t}_h^k(\cdot,\cdot)  and  \mathsf{o}_{h+1}^k(s_{h+1})
     bonus_res_t=torch.ones([H,nS,nA]).to(torch.float64)
@@ -152,9 +152,7 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
             policy_shape=policy_load[h].shape
             policy_load[h]=torch.zeros(policy_shape).scatter(dim=-1,index=max_indices,src=torch.ones(policy_shape))
             if prt_policy_normalization:
-                print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_normalization(policy_test=policy_load,size_act=nA,size_obs=nO)}")
-            '''      
-            '''
+                print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_policy_normalized(policy_test=policy_load,size_act=nA,size_obs=nO)}")
 
             # action_greedy is \widehat{\pi}_h^k(f_h)
             action_greedy=torch.argmax(policy_load[h][hist]).item()
@@ -186,7 +184,7 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
             print(f"\t\tEnter parameter learning")
         # line 29-30 in the original paper. Interact with the environment and sample a trajectory.
         if prt_policy_normalization:
-            print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_normalization(policy_test=policy_load,size_act=nA,size_obs=nO)}")
+            print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_policy_normalized(policy_test=policy_load,size_act=nA,size_obs=nO)}")
         traj=sample_trajectory(H,policy_load,model=(mu,T,O),reward=reward,output_reward=False)
 
         # line 34 in the orignal paper.
@@ -271,7 +269,7 @@ def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None
 
     2. To load previously saved models from file without logging to console, run:
 
-    with open('log_episode_2.txt',mode='r+') as log_episode_file:
+    with open('log\log_episode_2.txt',mode='r+') as log_episode_file:
         (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(\
                     model_true=model_true_load,\
                         reward=reward_true_load,\
@@ -311,7 +309,7 @@ def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None
     print('test Beta Vector Value Iteration.')
     print('%'*100)
     print('hyper parameters:{}')
-    with open('hyper_param.yaml') as hyp_file:
+    with open('config\hyper_param.yaml') as hyp_file:
         content=hyp_file.read()
     print(content)
     print('%'*100)

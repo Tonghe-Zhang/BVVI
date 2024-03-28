@@ -49,7 +49,7 @@ def log_output_param_error(mu_err,T_err,O_err, H:int)->None:
 
     with open('log\log.txt',mode='r') as log_file:
         loss_curve=np.loadtxt('log\log.txt')
-        print(f"read in {loss_curve.shape[0]} items from File:{'log\log.txt'}" )
+        # print(f"read in {loss_curve.shape[0]} items from File:{'log\log.txt'}" )
         indices=np.arange(loss_curve.shape[0])*H
         labels_plt=['Initial distribution $\mu(\cdot)$',\
                     'Transition matrices $\{\mathbb{T}_h(\cdot|s,a)\}_{h=1}^{H+1}$',\
@@ -157,7 +157,7 @@ def init_occurrence_counters(H:int, nS:int, nO:int, nA:int)->tuple:
     return (Ns_init, Nssa, Nssa_ones, Nsa, Nos, Nos_ones, Ns)
 
 
-def test_normalization(policy_test:list, size_obs:int, size_act:int)->bool:
+def test_policy_normalized(policy_test:list, size_obs:int, size_act:int)->bool:
     '''
     input policy
     output whether this policy is normalized
@@ -183,8 +183,6 @@ def test_normalization(policy_test:list, size_obs:int, size_act:int)->bool:
 def test_log_output():
     log_output_tested_rewards(averge_risk_measure_of_each_episode=np.array([1,3,2,4,7]), H=5)
 
-
-
 def test_output_log_file(output_to_log_file=True):
     import sys
     if output_to_log_file:
@@ -195,7 +193,7 @@ def test_output_log_file(output_to_log_file=True):
     print('test Beta Vector Value Iteration.')
     print('%'*100)
     print('hyper parameters:{}')
-    with open('hyper_param.yaml') as hyp_file:
+    with open('config\hyper_param.yaml') as hyp_file:
         content=hyp_file.read()
     print(content)
     print('%'*100)

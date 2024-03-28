@@ -46,7 +46,7 @@ from POMDP_model import initialize_model, initialize_policy, initialize_reward, 
 
 def test_MC_high_dimensional():
     # load hyper parameters from a yaml file.
-    with open("hyper_param.yaml", 'r') as file:
+    with open("config\hyper_param.yaml", 'r') as file:
         hyper_param = yaml.safe_load(file)
     nA=hyper_param['sizes']['size_of_action_space']
     nS=hyper_param['sizes']['size_of_state_space']

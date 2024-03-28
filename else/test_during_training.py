@@ -17,7 +17,7 @@ with open('log\log_episode.txt',mode='r+') as log_episode_file:
     tested_returns=data[:,0]
     loss_curve=data[:,1:4]
     
-    nS,nO,nA,H,K,nF,delta,gamma,iota = load_hyper_param("hyper_param.yaml")
+    nS,nO,nA,H,K,nF,delta,gamma,iota = load_hyper_param("config\hyper_param.yaml")
     # plot planning result.
     log_output_tested_rewards(tested_returns,H)
 

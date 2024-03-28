@@ -15,7 +15,7 @@ def positive_func(x:np.float64)->np.float64:
     return np.max(x,0)
 
 # load hyper parameters from a yaml file.
-with open("hyper_param.yaml", 'r') as file:
+with open("config\hyper_param.yaml", 'r') as file:
     hyper_param = yaml.safe_load(file)
 nA=hyper_param['sizes']['size_of_action_space']
 nS=hyper_param['sizes']['size_of_state_space']

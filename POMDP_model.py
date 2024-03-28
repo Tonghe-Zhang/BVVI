@@ -3,7 +3,7 @@ import torch
 import yaml
 
 # load hyper parameters from a yaml file.
-with open("hyper_param.yaml", 'r') as file:
+with open("config\hyper_param.yaml", 'r') as file:
     hyper_param = yaml.safe_load(file)
 nA=hyper_param['sizes']['size_of_action_space']
 nS=hyper_param['sizes']['size_of_state_space']
@@ -32,6 +32,7 @@ def sample_from(dist)->int:
     '''
     generate one sample from a given distribution 'dist'.
     '''
+    print(f"sample from dist={dist}")
     return int(np.random.choice(a=list(np.arange(len(dist))), size=1, p=(dist)))
 
 def initialize_reward(nS:int, nA:int, H:int, init_type:str)->torch.Tensor:
