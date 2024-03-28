@@ -42,7 +42,7 @@ def log_output_param_error(mu_err,T_err,O_err, H:int)->None:
     write and read Monte-Carlo erros and plot three curves on a graph. 
     '''
     with open('log\log.txt',mode='w') as log_file:
-        log_file.write(f"\n\nTest BVVI. Current time={current_time_str()}")
+        # log_file.write(f"\n\nTest BVVI. Current time={current_time_str()}")
         param_error=np.column_stack((mu_err,T_err,O_err))
         np.savetxt('log\log.txt',param_error)
         log_file.close()
@@ -263,3 +263,47 @@ def load_model_policy(parent_directory):
     return (kernels, policy)
 
 # test_log_output()
+
+
+def short_test(policy,mu_true,T_true,O_true,R_true,only_reward=False):
+    from POMDP_model import sample_from, action_from_policy
+
+    horizon=3
+    model=(mu_true,T_true,O_true)
+    reward=R_true
+    output_reward=True
+
+    print("\n")
+    init_dist, trans_kernel, emit_kernel =model 
+
+    full_traj=np.ones((3,horizon+1), dtype=int)*(-1)   
+    if output_reward:
+        sampled_reward=np.ones(horizon, dtype=np.float64)*(-1)
+
+    # S_0
+    full_traj[0][0]=sample_from(init_dist)
+    # A single step of interactions
+    for h in range(horizon+1):
+        # S_h
+        state=full_traj[0][h]
+        # O_h \sim \mathbb{O}_h(\cdot|s_h)
+        observation=sample_from(emit_kernel[h][:,state])
+        full_traj[1][h]=observation
+        # A_h \sim \pi_h(\cdot |f_h). We do not collect A_{H+1}, which is a[H]. We set a[H] as 0
+        if h<horizon:
+            action=action_from_policy(full_traj[1:3,:],h,policy)
+            full_traj[2][h]=action
+            # R_h = r_h(s_h,a_h)
+            if output_reward:
+                sampled_reward[h]=reward[h][state][action]
+                print(f"(h,s,a,r)={h,state,action,sampled_reward[h]}")
+        # S_h+1 \sim \mathbb{T}_{h}(\cdot|s_{h},a_{h})
+        if h<horizon:  #do not record s_{H+1}
+            new_state=sample_from(trans_kernel[h][:,state,action])
+            full_traj[0][h+1]=new_state
+
+    print(f"sampled_reward={sampled_reward}")
+    print(f"full_traj=\n{full_traj}")
+    if only_reward==True:
+        return sampled_reward
+    

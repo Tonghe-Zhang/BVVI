@@ -16,7 +16,7 @@ from func import test_policy_normalized, test_output_log_file, current_time_str,
 from func import save_model_rewards, load_model_rewards, save_model_policy, load_model_policy
 
 # load hyper parameters
-nS,nO,nA,H,K,nF,delta,gamma,iota = load_hyper_param("config\hyper_param.yaml")
+nS,nO,nA,H,K,nF,delta,gamma,iota = load_hyper_param("config\hyper_param_naive.yaml")    # can delete the naive
 
 # obtain the true environment. invisible for the agent. Immutable. Only used during sampling.
 real_env_kernels=initialize_model(nS,nO,nA,H,init_type='random')
@@ -39,7 +39,7 @@ tested_returns=np.zeros([K])
 evaluation_metrics=(mu_err, T_err, O_err, tested_returns)
 
 
-def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episode_file, model_load=None, policy_load=None)->tuple:
+def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episode_file, model_load=None, policy_load=None,weight_output_parent_directory='learnt')->tuple:
     '''
     inputs: as the name suggests.
     output: policy, model_learnt, evaluation results
@@ -229,7 +229,7 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
         write_str=str(tested_risk_measure[k])+'\t'+str(mu_err[k])+'\t'+str(T_err[k])+'\t'+str(O_err[k])+'\t'
         log_episode_file.write(write_str+ "\n")
         # [Save weights] record the latest learnt parameters and policy:
-        save_model_policy((mu_hat, T_hat, O_hat), policy_load, 'learnt')
+        save_model_policy((mu_hat, T_hat, O_hat), policy_load, weight_output_parent_directory)
         if prt_progress:
             print(f"\tSuccessfuly saved newest kernels and policies to folder: {'./learnt'}")
     # %%%%%% End of training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -249,7 +249,16 @@ def visualize_performance(evaluation_results):
     # plot parameter learning results
     log_output_param_error(mu_err,T_err,O_err, H)
 
-def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None, reward_true_load=None, model_load=None, policy_load=None):
+def main(output_to_log_file=False, 
+         train_from_scratch=True, 
+         model_true_load=None, 
+         reward_true_load=None, 
+         model_load=None, 
+         policy_load=None,
+         weight_output_parent_directory='learnt\\naive',
+         config_filename='hyper_param_naive',
+         log_episode_filename='log_episode_naive',
+         ):
     '''
     1. To train from scratch, run:
 
@@ -269,14 +278,15 @@ def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None
 
     2. To load previously saved models from file without logging to console, run:
 
-    with open('log\log_episode_2.txt',mode='r+') as log_episode_file:
-        (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(\
-                    model_true=model_true_load,\
-                        reward=reward_true_load,\
-                            model_load=model_load,\
-                                policy_load=policy_load,
-                                    evaluation_metrics=evaluation_metrics,\
-                                        log_episode_file=log_episode_file)
+with open('log\log_episode_naive.txt',mode='r+') as log_episode_file:
+    (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(\
+            model_true=model_true_load,\
+                reward=reward_true_load,\
+                    model_load=model_load,\
+                        policy_load=policy_load,
+                            evaluation_metrics=evaluation_metrics,\
+                                log_episode_file=log_episode_file,\
+                                    weight_output_parent_directory='learnt\\naive')
 
 
     3. To print not to the logging file but only to the console, run:
@@ -298,7 +308,7 @@ def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None
     '''
 
     if output_to_log_file:
-        print(f"Will output log information to both the file:{'log\console_output.log'} and the console.")
+        print(f"Will output log information to both the file:{'console_output.log'} and the console.")
         old_stdout = sys.stdout
         log_file = open("log\console_output.log","w")
         sys.stdout = Logger() #sys.stdout = log_file
@@ -309,20 +319,21 @@ def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None
     print('test Beta Vector Value Iteration.')
     print('%'*100)
     print('hyper parameters:{}')
-    with open('config\hyper_param.yaml') as hyp_file:
+    with open('config\\'+config_filename+'.yaml') as hyp_file:  # can remove naive.
         content=hyp_file.read()
     print(content)
     print('%'*100)
     print('Call function \'  beta_vector_value_iteration...\' ')
 
-    with open('log\log_episode.txt',mode='r+') as log_episode_file:
-        log_episode_file.write(f"\n\nTest BVVI. Current time={current_time_str()}")
+    with open('log\\'+log_episode_filename+'.txt',mode='r+') as log_episode_file:
+        # log_episode_file.write(f"\n\nTest BVVI. Current time={current_time_str()}")
         if train_from_scratch:
             (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(\
                 model_true=real_env_kernels,\
                     reward=reward_fix,\
                         evaluation_metrics=evaluation_metrics,\
-                            log_episode_file=log_episode_file)
+                            log_episode_file=log_episode_file,\
+                                weight_output_parent_directory=weight_output_parent_directory)
         else:
             (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(\
                 model_true=model_true_load,\
@@ -330,10 +341,11 @@ def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None
                         model_load=model_load,\
                             policy_load=policy_load,
                                 evaluation_metrics=evaluation_metrics,\
-                                    log_episode_file=log_episode_file)
-        log_episode_file.write(f"\n\nEnd Testing BVVI. Current time={current_time_str()}")
+                                    log_episode_file=log_episode_file,\
+                                        weight_output_parent_directory=weight_output_parent_directory)
+        # log_episode_file.write(f"\n\nEnd Testing BVVI. Current time={current_time_str()}")
         log_episode_file.close()
-    episode_data=np.loadtxt('log\log_episode.txt', dtype=np.float64)
+    episode_data=np.loadtxt('log\\'+log_episode_filename+'.txt', dtype=np.float64)
     print('\'  beta_vector_value_iteration...\' returned.')
     print(f"End BVVI test. Current time={current_time_str()}")
     print('%'*100)
@@ -349,4 +361,25 @@ def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None
     if output_to_log_file is True:
         sys.stdout = old_stdout
         log_file.close()
+    return policy
+
+
+T_true=torch.stack([torch.tensor([[0,0,1],[1,0,0],[0,1,0]]).unsqueeze(-1).repeat(1,1,2) for _ in range(4)])
+O_true=torch.stack([torch.tensor([[0.4,0.2,0.4],[0.3,0.5,0.2],[0.2,0.7,0.1]]).transpose(0,1).repeat(1,1) for _ in range(4)])
+mu_true=torch.tensor([1,0,0])
+R_true=torch.tensor([[1,0],[0,1],[1,0]]).unsqueeze(0).repeat(3,1,1)
+
+model_true_load=(mu_true, T_true, O_true)
+reward_true_load=R_true
+
+policy_learnt=main(True,True,model_true_load,reward_true_load,None,None,'learnt\\naive')
+
+
+print('%'*100)
+print("short test of policy")
+from func import short_test
+short_test(policy_learnt,mu_true,T_true,O_true,R_true,only_reward=False)
+print(policy_learnt)
+
+
 

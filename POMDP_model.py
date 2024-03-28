@@ -32,7 +32,7 @@ def sample_from(dist)->int:
     '''
     generate one sample from a given distribution 'dist'.
     '''
-    print(f"sample from dist={dist}")
+    # print(f"sample from dist={dist}")
     return int(np.random.choice(a=list(np.arange(len(dist))), size=1, p=(dist)))
 
 def initialize_reward(nS:int, nA:int, H:int, init_type:str)->torch.Tensor:
