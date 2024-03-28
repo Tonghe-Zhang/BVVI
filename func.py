@@ -41,15 +41,15 @@ def log_output_param_error(mu_err,T_err,O_err, H:int)->None:
     '''
     write and read Monte-Carlo erros and plot three curves on a graph. 
     '''
-    with open('log.txt',mode='w') as log_file:
+    with open('log\log.txt',mode='w') as log_file:
         log_file.write(f"\n\nTest BVVI. Current time={current_time_str()}")
         param_error=np.column_stack((mu_err,T_err,O_err))
-        np.savetxt('log.txt',param_error)
+        np.savetxt('log\log.txt',param_error)
         log_file.close()
 
-    with open('log.txt',mode='r') as log_file:
-        loss_curve=np.loadtxt('log.txt')
-        print(f"read in {loss_curve.shape[0]} items from File:{'log.txt'}" )
+    with open('log\log.txt',mode='r') as log_file:
+        loss_curve=np.loadtxt('log\log.txt')
+        print(f"read in {loss_curve.shape[0]} items from File:{'log\log.txt'}" )
         indices=np.arange(loss_curve.shape[0])*H
         labels_plt=['Initial distribution $\mu(\cdot)$',\
                     'Transition matrices $\{\mathbb{T}_h(\cdot|s,a)\}_{h=1}^{H+1}$',\
@@ -63,8 +63,8 @@ def log_output_param_error(mu_err,T_err,O_err, H:int)->None:
         plt.savefig('plots/MCErr'+current_time_str()+'.jpg')
         plt.show()
 
-def log_output_tested_rewards(accumulated_rewards_of_each_episode:np.array,H:int)->None:
-    loss_curve=accumulated_rewards_of_each_episode
+def log_output_tested_rewards(averge_risk_measure_of_each_episode:np.array,H:int)->None:
+    loss_curve=averge_risk_measure_of_each_episode
     indices=np.arange(loss_curve.shape[0])  #*H
     labels_plt=['BVVI(ours)']
     # replace with these lines when we have multiple curves.
@@ -72,9 +72,9 @@ def log_output_tested_rewards(accumulated_rewards_of_each_episode:np.array,H:int
     #     plt.plot((indices),loss_curve[id],label=labels_plt[id])
     plt.plot((indices), loss_curve) #, labels_plt
 
-    plt.title(f'Average Accumulated Rewards of Output Policies. Horizon H={H}')
+    plt.title(f'Average Risk Measure of Policies. Horizon H={H}')
     plt.xlabel(f'Episode $k$')    # H transitions per iteration.   Samples N (=iteration $K$ * {H})
-    plt.ylabel(f'Average Accumulated Rewards')         # $\sum_{h=1}^{H}r_h(\mathbf{S}_h,\mathbf{A}_h)$
+    plt.ylabel(f'Average Risk Measure')         # $\sum_{h=1}^{H}r_h(\mathbf{S}_h,\mathbf{A}_h)$
     
     plt.legend(loc='upper right', labels=labels_plt)
     plt.savefig('plots/Reward'+current_time_str()+'.jpg')
@@ -181,7 +181,7 @@ def test_normalization(policy_test:list, size_obs:int, size_act:int)->bool:
 
 
 def test_log_output():
-    log_output_tested_rewards(accumulated_rewards_of_each_episode=np.array([1,3,2,4,7]), H=5)
+    log_output_tested_rewards(averge_risk_measure_of_each_episode=np.array([1,3,2,4,7]), H=5)
 
 
 
@@ -189,7 +189,7 @@ def test_output_log_file(output_to_log_file=True):
     import sys
     if output_to_log_file:
         old_stdout = sys.stdout
-        log_file = open("console_output.log","w")
+        log_file = open("log\console_output.log","w")
         sys.stdout = log_file
     print('%'*100)
     print('test Beta Vector Value Iteration.')
@@ -218,7 +218,7 @@ class Logger(object):
     
     def __init__(self):
         self.terminal = sys.stdout
-        self.log = open("console_output.log", "a")
+        self.log = open("log\console_output.log", "a")
    
     def write(self, message):
         self.terminal.write(message)
@@ -263,8 +263,5 @@ def load_model_policy(parent_directory):
     policy_dict = torch.load(parent_directory+'\Policy.pt')
     policy=[policy_dict[id] for id in range(len(policy_dict))]
     return (kernels, policy)
-
-
-
 
 # test_log_output()

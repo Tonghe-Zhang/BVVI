@@ -1,4 +1,3 @@
-
 import torch
 import numpy as np   
 import yaml 
@@ -12,8 +11,8 @@ from POMDP_model import initialize_model, initialize_policy, initialize_reward, 
 
 from func import load_hyper_param, current_time_str, log_output_tested_rewards
 
-with open('log_episode.txt',mode='r+') as log_episode_file:
-    data=np.loadtxt('log_episode.txt')
+with open('log\log_episode.txt',mode='r+') as log_episode_file:
+    data=np.loadtxt('log\log_episode.txt')
     print(data.shape)
     tested_returns=data[:,0]
     loss_curve=data[:,1:4]

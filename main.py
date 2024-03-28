@@ -1,4 +1,3 @@
-
 import torch
 import numpy as np   
 import yaml 
@@ -28,7 +27,7 @@ reward_fix=initialize_reward(nS,nA,H,'random')
 # record the generated kernels and rewards.
 save_model_rewards(real_env_kernels, reward_fix, 'real_env')
 
-# Training 
+# Training
 prt_progress=True
 prt_policy_normalization=True
 
@@ -49,7 +48,7 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
     mu,T,O=model_true
 
     # used only during evaluation
-    mu_err, T_err, O_err, tested_returns=evaluation_metrics
+    mu_err, T_err, O_err, tested_risk_measure=evaluation_metrics
 
     # %%%%%%% Initialization  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if model_load==None:
@@ -217,16 +216,19 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
 
         # %%%%%% Performance evaluation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         # [Evaluation] test policy learnt in this episode against the true environment, collect the average accumulated rewards of 10 i.i.d. tests.
-        reward_tests=[np.sum(sample_trajectory(H,policy_load,model_true,reward,output_reward=True)) for _ in range(10) ]
-        tested_returns[k]=np.mean(reward_tests)
+        ''''
+        tested_return = \frac{1}{\gamm} \mathbb{E}^{\widehat{\pi}^k} e^{\gamma \sum_{h=1}^H r_h(s_h,a_h)} 
+        '''
+        num_samples=10
+        tested_risk_measure[k]=(1/gamma)*np.array([np.exp(gamma*sum(sample_trajectory(H,policy_load,model_true,reward,output_reward=True))) for _ in range(num_samples)]).mean()
         # [Evaluation] compute the average Frobenius error between the true and learnt parameters until this iter.
         mu_err[k]=torch.linalg.norm(mu-mu_hat)/mu.numel()
         T_err[k]=torch.linalg.norm(T-T_hat)/T.numel()
         O_err[k]=torch.linalg.norm(O-O_hat)/O.numel()
         # [Logging]logging into log_episode_file after each episode.
         if prt_progress:
-            print(f"\tEnd of episode {k}. policy's tested_returns[{k}]={tested_returns[k]}, mu_err[{k}]={mu_err[k]}, T_err[{k}]={T_err[k]}, O_err[{k}]={O_err[k]}")
-        write_str=str(tested_returns[k])+'\t'+str(mu_err[k])+'\t'+str(T_err[k])+'\t'+str(O_err[k])+'\t'
+            print(f"\tEnd of episode {k}. policy's tested_returns[{k}]={tested_risk_measure[k]}, mu_err[{k}]={mu_err[k]}, T_err[{k}]={T_err[k]}, O_err[{k}]={O_err[k]}")
+        write_str=str(tested_risk_measure[k])+'\t'+str(mu_err[k])+'\t'+str(T_err[k])+'\t'+str(O_err[k])+'\t'
         log_episode_file.write(write_str+ "\n")
         # [Save weights] record the latest learnt parameters and policy:
         save_model_policy((mu_hat, T_hat, O_hat), policy_load, 'learnt')
@@ -236,24 +238,71 @@ def beta_vector_value_iteration(model_true, reward, evaluation_metrics,log_episo
     if prt_progress:
         print(f"End of training. number of iters K={K}")
     model_load=(mu_hat, T_hat, O_hat)
-    evaluation_results=(mu_err,T_err,O_err,tested_returns)
+    evaluation_results=(mu_err,T_err,O_err,tested_risk_measure)
     return (policy_load, model_load, evaluation_results)
 
 def visualize_performance(evaluation_results):
     # unpack
-    mu_err,T_err,O_err, tested_returns=evaluation_results
+    mu_err,T_err,O_err, tested_risk_measure=evaluation_results
 
     # plot planning result.
-    log_output_tested_rewards(tested_returns,H)
+    log_output_tested_rewards(tested_risk_measure,H)
 
     # plot parameter learning results
     log_output_param_error(mu_err,T_err,O_err, H)
 
 def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None, reward_true_load=None, model_load=None, policy_load=None):
+    '''
+    1. To train from scratch, run:
+
+    main(output_to_log_file=True, train_from_scratch=True)
+
+
+    2. To load previously saved models from file, run these commands:
+
+    model_true_load, reward_true_load=load_model_rewards('real_env')
+
+    model_load, policy_load=load_model_policy('learnt')
+
+    .....and then run this command:
+
+    main(output_to_log_file=True, train_from_scratch=False, model_true_load=model_true_load, reward_true_load=reward_true_load, model_load=model_load, policy_load=policy_load)
+
+
+    2. To load previously saved models from file without logging to console, run:
+
+    with open('log_episode_2.txt',mode='r+') as log_episode_file:
+        (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(\
+                    model_true=model_true_load,\
+                        reward=reward_true_load,\
+                            model_load=model_load,\
+                                policy_load=policy_load,
+                                    evaluation_metrics=evaluation_metrics,\
+                                        log_episode_file=log_episode_file)
+
+
+    3. To print not to the logging file but only to the console, run:
+
+    output_to_log_file=False, then print logging info to console
+
+
+    4. To check recent update in console log file:
+
+    while True:
+        with open("log\console_output.log",mode='r') as log_console_file:
+            print(log_console_file.read())
+        time.sleep(10)
+
+    5. To test the logger file, run:
+
+    test_output_log_file()
+
+    '''
+
     if output_to_log_file:
-        print(f"Will output log information to both the file:{'console_output.log'} and the console.")
+        print(f"Will output log information to both the file:{'log\console_output.log'} and the console.")
         old_stdout = sys.stdout
-        log_file = open("console_output.log","w")
+        log_file = open("log\console_output.log","w")
         sys.stdout = Logger() #sys.stdout = log_file
         print(f"Start BVVI test. Current time={current_time_str()}")
         time.sleep(3)
@@ -268,7 +317,7 @@ def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None
     print('%'*100)
     print('Call function \'  beta_vector_value_iteration...\' ')
 
-    with open('log_episode.txt',mode='r+') as log_episode_file:
+    with open('log\log_episode.txt',mode='r+') as log_episode_file:
         log_episode_file.write(f"\n\nTest BVVI. Current time={current_time_str()}")
         if train_from_scratch:
             (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(\
@@ -286,7 +335,7 @@ def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None
                                     log_episode_file=log_episode_file)
         log_episode_file.write(f"\n\nEnd Testing BVVI. Current time={current_time_str()}")
         log_episode_file.close()
-    episode_data=np.loadtxt('log_episode.txt', dtype=np.float64)
+    episode_data=np.loadtxt('log\log_episode.txt', dtype=np.float64)
     print('\'  beta_vector_value_iteration...\' returned.')
     print(f"End BVVI test. Current time={current_time_str()}")
     print('%'*100)
@@ -303,56 +352,3 @@ def main(output_to_log_file=False, train_from_scratch=True, model_true_load=None
         sys.stdout = old_stdout
         log_file.close()
 
-
-
-'''
-1. To load previously saved models from file, run these commands:
-
-model_true_load, reward_true_load=load_model_rewards('real_env')
-
-model_load, policy_load=load_model_policy('learnt')
-
-.....and then run this command:
-
-main(output_to_log_file=True, train_from_scratch=False, model_true_load=model_true_load, reward_true_load=reward_true_load, model_load=model_load, policy_load=policy_load)
-
-
-2. To do the job without logging too much, run:
-
-with open('log_episode_2.txt',mode='r+') as log_episode_file:
-    (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(\
-                model_true=model_true_load,\
-                    reward=reward_true_load,\
-                        model_load=model_load,\
-                            policy_load=policy_load,
-                                evaluation_metrics=evaluation_metrics,\
-                                    log_episode_file=log_episode_file)
-
-
-3. To print not to the logging file but only to the console, run:
-
-output_to_log_file=False, then print logging info to console
-
-'''
-        
-main(output_to_log_file=True, train_from_scratch=True)
-
-
-
-'''''
-# check recent update in console log file:
-
-while True:
-    with open("console_output.log",mode='r') as log_console_file:
-        print(log_console_file.read())
-    time.sleep(10)
-'''
-
-
-
-''''
-# Test the file
-
-test_output_log_file()
-
-'''

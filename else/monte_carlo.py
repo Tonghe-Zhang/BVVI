@@ -19,7 +19,7 @@ def test_MC_1D():
 
     freq_table=np.zeros(size_of_space)
 
-    with open('log.txt',mode='w') as log_file:
+    with open('log\log.txt',mode='w') as log_file:
         loss=np.zeros(num_samples)
         for k in range(num_samples):
             sample=sample_from(dist=dist_true)
@@ -28,12 +28,12 @@ def test_MC_1D():
             loss[k]=np.linalg.norm(dist_empirical-dist_true)
             if (k % 100 == 99):
                 print(f"k={k} finish logging.")
-        np.savetxt('log.txt',loss)
+        np.savetxt('log\log.txt',loss)
         log_file.close()
 
-    with open('log.txt',mode='r') as log_file:
-        loss_curve=np.loadtxt('log.txt')
-        print(f"read in {len(loss_curve)} items from File:{'log.txt'}" )
+    with open('log\log.txt',mode='r') as log_file:
+        loss_curve=np.loadtxt('log\log.txt')
+        print(f"read in {len(loss_curve)} items from File:{'log\log.txt'}" )
         indices=np.arange(num_samples)
         plt.plot(indices,loss_curve)
         plt.title('2-norm loss of Monte-Carlo Simulation')
@@ -133,14 +133,14 @@ def log_output(mu_err,T_err,O_err, H:int)->None:
     '''
     write and read Monte-Carlo erros and plot three curves on a graph. 
     '''
-    with open('log.txt',mode='w') as log_file:
+    with open('log\log.txt',mode='w') as log_file:
         param_error=np.column_stack((mu_err,T_err,O_err))
-        np.savetxt('log.txt',param_error)
+        np.savetxt('log\log.txt',param_error)
         log_file.close()
 
-    with open('log.txt',mode='r') as log_file:
-        loss_curve=np.loadtxt('log.txt')
-        print(f"read in {loss_curve.shape[0]} items from File:{'log.txt'}" )
+    with open('log\log.txt',mode='r') as log_file:
+        loss_curve=np.loadtxt('log\log.txt')
+        print(f"read in {loss_curve.shape[0]} items from File:{'log\log.txt'}" )
         indices=np.arange(loss_curve.shape[0])*H
         labels_plt=['Initial distribution $\mu(\cdot)$',\
                     'Transition matrices $\{\mathbb{T}_h(\cdot|s,a)\}_{h=1}^{H+1}$',\
