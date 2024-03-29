@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import yaml
-from func import save_model_rewards,load_hyper_param
+from func import save_model_rewards,load_hyper_param, test_model_normalized, test_policy_normalized
 
 def get_random_dist(dim:int,dist_type:str)->np.array:
     '''
@@ -37,7 +37,6 @@ def initialize_reward(nS:int, nA:int, H:int, init_type:str)->torch.Tensor:
     description:
         reward[h][s][a] stands for r_h(s,a), which picks value in [0,1]
     '''
-
     reward=None
     if init_type=='uniform':
         r_unif=np.random.rand()
@@ -119,10 +118,12 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
         raise(NotImplementedError)
     
     model_ret=(init_dist.to(torch.float64),trans_kernel.to(torch.float64),emit_kernel.to(torch.float64))
-    
+
+    # test whether the output model is valid.
     if model_ret==None:
         raise(ValueError)
-    
+    if test_model_normalized(model_being_tested=model_ret, nS=nS,nA=nA,H=horizon)==False:
+        raise(ValueError)
     return model_ret
 
 def initialize_model_reward(nS,nO,nA,H,model_init_type='random_homogeneous', reward_init_type='random_homogeneous'):
@@ -136,6 +137,64 @@ def initialize_model_reward(nS,nO,nA,H,model_init_type='random_homogeneous', rew
     save_model_rewards(real_env_kernels, real_env_reward, 'real_env')
     
     return real_env_kernels, real_env_reward
+
+
+def initialize_policy(nO:int,nA:int,H:int):
+    '''
+    function:
+        Initialize a stochastic, history-dependent policy that receives observable history of [O_1,A_1,\cdots, O_H] 
+        and returns a policy table  \pi = \{ \pi_h(\cdot|\cdot)  \} as a high-dimensional tensor.
+
+    inputs:
+        sizes of the observation and action space (nO,nA), and the horizon length H
+
+    returns:
+        length H tensor list.
+        total dimension: 2H+1
+        .shape =torch.Size([horizon,        nO, nA, nO, nA, nO, nA, ... nO,        nA])
+
+        dim[0]: 
+            horizon index h
+            policy_table[h] indicates \pi_h(\cdot|\cdot)
+        dim[1]~dim[2H-1]: 
+            o1 a1 o2 a2...oH history
+        dim[2H]:
+            the distribution of ah, initialized as uniform distribution.
+
+    How to access the policy_table:
+    policy[h][f] is a tensor of shape torch.Size([nA]), which corresponds to \pi_h(\cdot|f_h).   policy[h][history].shape=torch.Size([nA])
+    policy[h][f][a] is \pi_h(a|f_h)
+    To see the shapes:
+        In [219]: for h in range(H):
+        ...:     print(policy[h].shape)
+        ...:
+        torch.Size([4, 2])
+        torch.Size([4, 2, 4, 2])
+        torch.Size([4, 2, 4, 2, 4, 2])
+        torch.Size([4, 2, 4, 2, 4, 2, 4, 2])
+        torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
+
+    How to sample from the policy:
+    input some tuple fh of length 2H-1 
+        fh=(1, 0, 1, 0, 1, 0, 1, 0, 1)
+    input the horizon number h  (so that only the first 2h-1 elements of fh will be valid)
+        h=2
+    then the distribution of a_h \sim \pi_h(\cdot|fh) is 
+        dist=policy[h][f].unsqueeze(0)
+    which is of shape
+        torch.Size([1, nA])
+    To sample from an action from the policy at step h with history f_h, run this line:
+        ah=sample_from(dist)
+    '''
+
+    policy=[None for _ in range(H)]
+    for h in range(H):
+        policy[h]=(torch.ones([nO if i%2==0 else nA for i in range(2*h)]+[nO] +[nA])*(1/nA)).to(torch.float64)
+
+    # make sure output policy is valid.
+    if test_policy_normalized(policy_test=policy, size_obs=nO,size_act=nA) == False:
+        raise(ValueError)
+    return policy
 
 def sample_trajectory(horizon:int, policy, model, reward, output_reward=False):
     '''
@@ -190,58 +249,6 @@ def sample_trajectory(horizon:int, policy, model, reward, output_reward=False):
         return sampled_reward
     return full_traj
 
-def initialize_policy(nO:int,nA:int,H:int):
-    '''
-    function:
-        Initialize a stochastic, history-dependent policy that receives observable history of [O_1,A_1,\cdots, O_H] 
-        and returns a policy table  \pi = \{ \pi_h(\cdot|\cdot)  \} as a high-dimensional tensor.
-
-    inputs:
-        sizes of the observation and action space (nO,nA), and the horizon length H
-
-    returns:
-        length H tensor list.
-        total dimension: 2H+1
-        .shape =torch.Size([horizon,        nO, nA, nO, nA, nO, nA, ... nO,        nA])
-
-        dim[0]: 
-            horizon index h
-            policy_table[h] indicates \pi_h(\cdot|\cdot)
-        dim[1]~dim[2H-1]: 
-            o1 a1 o2 a2...oH history
-        dim[2H]:
-            the distribution of ah, initialized as uniform distribution.
-
-    How to access the policy_table:
-    policy[h][f] is a tensor of shape torch.Size([nA]), which corresponds to \pi_h(\cdot|f_h).   policy[h][history].shape=torch.Size([nA])
-    policy[h][f][a] is \pi_h(a|f_h)
-    To see the shapes:
-        In [219]: for h in range(H):
-        ...:     print(policy[h].shape)
-        ...:
-        torch.Size([4, 2])
-        torch.Size([4, 2, 4, 2])
-        torch.Size([4, 2, 4, 2, 4, 2])
-        torch.Size([4, 2, 4, 2, 4, 2, 4, 2])
-        torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
-
-    How to sample from the policy:
-    input some tuple fh of length 2H-1 
-        fh=(1, 0, 1, 0, 1, 0, 1, 0, 1)
-    input the horizon number h  (so that only the first 2h-1 elements of fh will be valid)
-        h=2
-    then the distribution of a_h \sim \pi_h(\cdot|fh) is 
-        dist=policy[h][f].unsqueeze(0)
-    which is of shape
-        torch.Size([1, nA])
-    To sample from an action from the policy at step h with history f_h, run this line:
-        ah=sample_from(dist)
-    '''
-
-    policy=[None for _ in range(H)]
-    for h in range(H):
-        policy[h]=(torch.ones([nO if i%2==0 else nA for i in range(2*h)]+[nO] +[nA])*(1/nA)).to(torch.float64)
-    return policy
 
 
 def action_from_policy(raw_history:tuple,h:int,policy)->int:

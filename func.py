@@ -49,7 +49,11 @@ def test_normalization_O(O_hat:torch.Tensor,nS:int,H:int):
                     return False
     return True
 
-
+def test_model_normalized(model_being_tested:tuple, nS:int,nA:int,H:int):
+    mu_hat, T_hat,O_hat = model_being_tested
+    test_normalization_mu(mu_hat)
+    test_normalization_T(T_hat,nS,nA,H)
+    test_normalization_O(O_hat,nS,H)
 
 
 
@@ -386,9 +390,6 @@ def short_test(policy,mu_true,T_true,O_true,R_true,only_reward=False):
     #sampled_reward     accumulated_mean = 
     else:
         return full_traj
-
-
-
 
 
 def visualize_performance(evaluation_results, H:int):
