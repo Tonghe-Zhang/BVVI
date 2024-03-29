@@ -139,6 +139,7 @@ def test_with_medium_random_env():
 
 
 if __name__ == "__main__":
-    test_with_naive_env()
+    # test_with_naive_env()
+    test_with_medium_random_env()
 
 
