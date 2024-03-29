@@ -19,11 +19,12 @@ iota =np.log(K*H*nS*nO*nA/delta)
 def get_random_dist(dim:int,dist_type:str)->np.array:
     '''
     dist_type='random':   generate a random distribution that normalize to one
+    dist_type='random_homogeneous'
     dist_type='uniform':   generate a uniform distribution
     '''
     if dist_type=='uniform':
         return 1/dim*np.ones([dim])
-    elif dist_type=='random':
+    elif dist_type=='random' or dist_type=='random_homogeneous':
         dist=np.abs(np.random.randn(dim))
         return dist/sum(dist)
     else:
@@ -41,6 +42,7 @@ def initialize_reward(nS:int, nA:int, H:int, init_type:str)->torch.Tensor:
     inputs:
         sizes of the (s,a) spaces, horizon length H, and initiazation type(see below)
         dist_type='random':    the rewards of each (h,s,a) are not necessarily the same and are randomly picked, however different at each h.
+        dist_type='random_homogeneous': the rewards of each(s,a) are different but the same reward along the horizon.
         dist_type='uniform':   rewards on the entire (s,a) space are identical and randomly chosen
         dist_type='ergodic':   rewards of all (h,s,a) are identically chosen random value.
     returns:    
@@ -51,12 +53,14 @@ def initialize_reward(nS:int, nA:int, H:int, init_type:str)->torch.Tensor:
     if init_type=='uniform':
         r_unif=np.random.rand()
         reward=torch.ones([H,nS,nA])*r_unif
-        return reward
+        return reward        
     elif init_type=='random':
         reward=torch.zeros([H,nS,nA])
         for h in range(H):
             reward[h]=torch.rand([nS,nA])
         return reward
+    elif init_type=='random_homogeneous':
+        reward=torch.rand([nS,nA]).repeat(H,1,1)
     elif init_type=='ergodic':
         reward_layer=torch.rand([nS,nA]).unsqueeze(0)
         reward = reward_layer.repeat(H,1,1)
@@ -72,6 +76,7 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
             sizes of the three spaces
         init_type:  string
             dist_type='random':   generate a random distribution that normalize to one
+            dist_type='random_homogeneous':   generate the same random distribution
             dist_type='uniform':   generate a uniform distribution
     returns
         a tuple of three tensors. 
@@ -91,8 +96,8 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
     normalization: sum(mu) = tensor(1.0000, dtype=torch.float64)
     initialization: random distribution. 
     '''
+
     init_dist=torch.tensor(get_random_dist(dim=nS,dist_type=init_type))
-    
     
     '''
     transition matrices
@@ -103,9 +108,12 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
     initialization: random distribution.
     notice: we will not collect s_{H+1}, but set T_{H}(\cdot|sH,aH) as \delta(s_{H+1}-0), i.e. the H+1-th state is an absorbing state 0.
     '''
-    #trans_kernel=torch.transpose(torch.tensor( [ [ [get_random_dist(dim=nS) for s in range(10)] for a in range(20) ] for h in range(30) ]  ),1,3)
-    trans_kernel=torch.transpose(torch.tensor( np.array([ np.array([ np.array([get_random_dist(dim=nS,dist_type=init_type) for s in range(nS)]) for a in range(nA) ]) for h in range(horizon) ])  ),1,3)
-
+    if init_type=='random' or init_type=='uniform':
+        trans_kernel=torch.transpose(torch.tensor( np.array([ np.array([ np.array([get_random_dist(dim=nS,dist_type=init_type) for s in range(nS)]) for a in range(nA) ]) for h in range(horizon) ])  ),1,3)
+    elif init_type=='random_homogeneous':
+        trans_kernel=torch.transpose(torch.tensor(np.array([ np.array([get_random_dist(dim=nS,dist_type=init_type) for s in range(nS)]) for a in range(nA) ])).repeat(horizon,1,1,1)  ,1,3)     
+    else:
+        raise(NotImplementedError)
     '''
     emission matrices
     name:emit_kernel
@@ -114,9 +122,12 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
     normalization: sum(emit_kernel[h][:,s])=tensor(1.0000, dtype=torch.float64)
     initialization: random distribution. 
     '''
-    #emit_kernel=torch.transpose(torch.tensor([[get_random_dist(nO) for _ in range(nS)] for _ in range(horizon+1)]),1,2)
-    emit_kernel=torch.transpose(torch.tensor(np.array([np.array([get_random_dist(dim=nO,dist_type=init_type) for _ in range(nS)])for _ in range(horizon+1)])),1,2)
-    
+    if init_type=='random' or init_type=='uniform':
+        emit_kernel=torch.transpose(torch.tensor(np.array([np.array([get_random_dist(dim=nO,dist_type=init_type) for _ in range(nS)])for _ in range(horizon+1)])),1,2)
+    elif init_type=='random_homogeneous':
+        emit_kernel=torch.transpose(torch.tensor(np.array([get_random_dist(dim=nO,dist_type=init_type) for _ in range(nS)])).repeat(horizon+1,1,1),1,2)
+    else:
+        raise(NotImplementedError)
     return (init_dist.to(torch.float64),trans_kernel.to(torch.float64),emit_kernel.to(torch.float64))
 
 def initialize_model_reward(nS,nO,nA,H,model_init_type='random', reward_init_type='random'):

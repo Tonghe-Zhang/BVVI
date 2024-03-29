@@ -1,0 +1,47 @@
+'''
+    1. To train from scratch, run:
+
+    main(output_to_log_file=True, train_from_scratch=True)
+
+
+    2. To load previously saved models from file, run these commands:
+
+    model_true_load, reward_true_load=load_model_rewards('real_env')
+
+    model_load, policy_load=load_model_policy('learnt')
+
+    .....and then run this command:
+
+    main(output_to_log_file=True, train_from_scratch=False, model_true_load=model_true_load, reward_true_load=reward_true_load, model_load=model_load, policy_load=policy_load)
+
+
+    2. To load previously saved models from file without logging to console, run:
+
+with open('log\log_episode_naive.txt',mode='r+') as log_episode_file:
+    (policy, model_learnt, evaluation_results)=beta_vector_value_iteration(\
+            model_true=model_true_load,\
+                reward=reward_true_load,\
+                    model_load=model_load,\
+                        policy_load=policy_load,
+                            evaluation_metrics=evaluation_metrics,\
+                                log_episode_file=log_episode_file,\
+                                    weight_output_parent_directory='learnt\\naive')
+
+
+    3. To print not to the logging file but only to the console, run:
+
+    output_to_log_file=False, then print logging info to console
+
+
+    4. To check recent update in console log file:
+
+    while True:
+        with open("log\console_output.log",mode='r') as log_console_file:
+            print(log_console_file.read())
+        time.sleep(10)
+
+    5. To test the logger file, run:
+
+    test_output_log_file()
+
+    '''

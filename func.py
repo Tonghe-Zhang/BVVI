@@ -7,26 +7,51 @@ import yaml
 import torch
 import sys
 
-def test_normalization_T(T_hat,nS,nA,H):
-            normalized=True
-            for h in range(H):
-                for s in range(nS):
-                    for a in range(nA):
-                        if (np.fabs(sum(T_hat[h][:,s,a])-1)>1e-6):
-                            print(f"T_hat[{h}][:,{s},{a}]={T_hat[h][:,s,a]}, sum={sum(T_hat[h][:,s,a]):.10f}")
-                            raise(ValueError)
-                            return False
-            return True
+# test normalization
+def test_normalization_mu(mu:torch.Tensor):
+    # check all elements non-negative
+    positive=np.fabs((torch.sum(mu>=0)/mu.numel()).item()-1) <1e-6
+    normalized=(np.fabs(sum(mu)-1) <1e-6).item()
+    if positive==False:
+        raise(ValueError)
+        return False
+    if normalized==False:
+        raise(ValueError)
+        return False
+    return True
 
-def test_normalization_O(O_hat,nS,H):
-            normalized=True
-            for h in range(H+1):
-                for s in range(nS):
-                        if (np.fabs(sum(O_hat[h][:,s])-1)>1e-6):
-                            print(f"O_hat[{h}][:,{s}]={O_hat[h][:,s]}, sum={sum(O_hat[h][:,s]):.10f}")
-                            raise(ValueError)
-                            return False
-            return True
+def test_normalization_T(T_hat:torch.Tensor,nS:int,nA:int,H:int):
+    positive=np.fabs((torch.sum(T_hat>=0)/T_hat.numel()).item()-1) <1e-6
+    if positive == False:
+        raise(ValueError)
+        return False
+    normalized=True
+    for h in range(H):
+        for s in range(nS):
+            for a in range(nA):
+                if (np.fabs(sum(T_hat[h][:,s,a])-1)>1e-6):
+                    print(f"T_hat[{h}][:,{s},{a}]={T_hat[h][:,s,a]}, sum={sum(T_hat[h][:,s,a]):.10f}")
+                    raise(ValueError)
+                    return False
+    return True
+
+def test_normalization_O(O_hat:torch.Tensor,nS:int,H:int):
+    positive=np.fabs((torch.sum(O_hat>=0)/O_hat.numel()).item()-1) <1e-6
+    if positive == False:
+        raise(ValueError)
+        return False
+    normalized=True
+    for h in range(H+1):
+        for s in range(nS):
+                if (np.fabs(sum(O_hat[h][:,s])-1)>1e-6):
+                    print(f"O_hat[{h}][:,{s}]={O_hat[h][:,s]}, sum={sum(O_hat[h][:,s]):.10f}")
+                    raise(ValueError)
+                    return False
+    return True
+
+
+
+
 
 # (x)^+ and (x)^- functions.
 def negative_func(x:np.float64)->np.float64:
@@ -100,6 +125,40 @@ def log_output_tested_rewards(averge_risk_measure_of_each_episode:np.array,H:int
     plt.legend(loc='upper right', labels=labels_plt)
     plt.savefig('plots/Reward'+current_time_str()+'.jpg')
     plt.show()
+
+def log_output_test_reward_pretty(H:int,
+                                  gamma:float,
+                                  plot_optimal_policy=True,
+                                  optimal_value=0.0,
+                                  log_episode_file_name='log_episode_naive'
+                                  ):
+    log_file_directory='log\\'+log_episode_file_name+'.txt'
+    with open(log_file_directory,mode='r') as log_episode_file:
+        averge_risk_measure_of_each_episode=np.loadtxt(log_file_directory)[0:30,0]
+
+        loss_curve=averge_risk_measure_of_each_episode
+
+        indices=np.arange(loss_curve.shape[0]) 
+
+        plt.plot(indices, loss_curve,label='BVVI(ours)') 
+        
+        # optimal policy's performance (adjustable, optional)
+        if plot_optimal_policy:
+            plt.axhline(y=optimal_value, color='orange', linestyle='--',label='Optimal Policy')
+        
+        # upper and lower bounds of the accumulated risk measure.
+        plt.ylim((0.0,1/gamma*np.exp(gamma*H)*1.3))
+
+        plt.title(f'Accumulated Risk-Sensitive Reward of Policies')   # . Horizon H={H}
+        
+        plt.xlabel(f'Episode $k$')    # H transitions per iteration.   Samples N (=iteration $K$ * {H})
+        plt.ylabel(f'Average Risk Measure')         # $\sum_{h=1}^{H}r_h(\mathbf{S}_h,\mathbf{A}_h)$
+        
+        plt.legend(loc='upper right')
+
+        plt.savefig('plots/Reward'+current_time_str()+'.jpg')
+
+        plt.show()
 
 def init_history_space(H:int, nO:int, nA:int)->list:
     '''
@@ -283,13 +342,10 @@ def load_model_policy(parent_directory):
     policy=[policy_dict[id] for id in range(len(policy_dict))]
     return (kernels, policy)
 
-# test_log_output()
-
-
 def short_test(policy,mu_true,T_true,O_true,R_true,only_reward=False):
     from POMDP_model import sample_from, action_from_policy
 
-    horizon=3
+    horizon=T_true.shape[0]
     model=(mu_true,T_true,O_true)
     reward=R_true
     output_reward=True
@@ -330,4 +386,22 @@ def short_test(policy,mu_true,T_true,O_true,R_true,only_reward=False):
     #sampled_reward     accumulated_mean = 
     else:
         return full_traj
-    
+
+
+
+
+
+def visualize_performance(evaluation_results, H:int):
+    # unpack
+    mu_err,T_err,O_err, tested_risk_measure=evaluation_results
+
+    # plot planning result.
+    log_output_tested_rewards(tested_risk_measure,H)
+    # log_output_test_reward_pretty(H=H,gamma=gamma, plot_optimal_policy=True, optimal_value=np.exp(3), log_episode_file_name='log_episode_naive')
+
+    # plot parameter learning results
+    log_output_param_error(mu_err,T_err,O_err, H)
+
+
+
+# test_log_output()
