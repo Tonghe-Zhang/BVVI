@@ -7,6 +7,27 @@ import yaml
 import torch
 import sys
 
+def test_normalization_T(T_hat,nS,nA,H):
+            normalized=True
+            for h in range(H):
+                for s in range(nS):
+                    for a in range(nA):
+                        if (np.fabs(sum(T_hat[h][:,s,a])-1)>1e-6):
+                            print(f"T_hat[{h}][:,{s},{a}]={T_hat[h][:,s,a]}, sum={sum(T_hat[h][:,s,a]):.10f}")
+                            raise(ValueError)
+                            return False
+            return True
+
+def test_normalization_O(O_hat,nS,H):
+            normalized=True
+            for h in range(H+1):
+                for s in range(nS):
+                        if (np.fabs(sum(O_hat[h][:,s])-1)>1e-6):
+                            print(f"O_hat[{h}][:,{s}]={O_hat[h][:,s]}, sum={sum(O_hat[h][:,s]):.10f}")
+                            raise(ValueError)
+                            return False
+            return True
+
 # (x)^+ and (x)^- functions.
 def negative_func(x:np.float64)->np.float64:
     return np.min(x,0)
@@ -305,5 +326,8 @@ def short_test(policy,mu_true,T_true,O_true,R_true,only_reward=False):
     print(f"sampled_reward={sampled_reward}")
     print(f"full_traj=\n{full_traj}")
     if only_reward==True:
-        return sampled_reward
+        return np.cumsum(sampled_reward) / np.arange(1, sampled_reward.shape[0]+1)
+    #sampled_reward     accumulated_mean = 
+    else:
+        return full_traj
     

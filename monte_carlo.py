@@ -46,7 +46,7 @@ from POMDP_model import initialize_model, initialize_policy, initialize_reward, 
 
 def test_MC_high_dimensional():
     # load hyper parameters from a yaml file.
-    with open("config\hyper_param.yaml", 'r') as file:
+    with open("config\hyper_param_naive.yaml", 'r') as file:
         hyper_param = yaml.safe_load(file)
     nA=hyper_param['sizes']['size_of_action_space']
     nS=hyper_param['sizes']['size_of_state_space']
@@ -90,8 +90,9 @@ def test_MC_high_dimensional():
     O_err=np.zeros([num_iter])
 
     # start to learn the dynamics.
-    for k in range(num_iter):
-        traj=sample_trajectory(H,policy,model=(mu,T,O))
+    from tqdm import tqdm
+    for k in tqdm(range(num_iter)):
+        traj=sample_trajectory(H,policy,model=(mu,T,O),reward=reward)
 
         # update s0 count
         s0=traj[0][0]
@@ -115,13 +116,33 @@ def test_MC_high_dimensional():
             #print(f"size: Nssa[h]={Nssa[h].shape}, ones={Nssa_ones.shape}, sum={torch.sum(Nssa[h],dim=0,keepdim=True).shape}")
             Nsa[h]=(torch.max(Nssa_ones, torch.sum(Nssa[h],dim=0,keepdim=True)))
             T_hat[h]=Nssa[h]/Nsa[h]
-
+            # force normalization in case some (s,a) is not visited i.e. if some Nssa[h][s,a]==0
+            for s in range(nS):
+                for a in range(nA):
+                    #print(f"Before: T_hat[{h}][:,{s},{a}]= { T_hat[h][:,s,a]}")
+                    #print(f"sum(T_hat[h][:,s,a])==0{sum(T_hat[h][:,s,a])==0}")
+                    normalize_sum=sum(T_hat[h][:,s,a])
+                    if normalize_sum==0:
+                        T_hat[h][:,s,a]=torch.ones_like(T_hat[h][:,s,a])/nS 
+                    else:
+                        T_hat[h][:,s,a]=T_hat[h][:,s,a]/normalize_sum
+                    #print(f"After: T_hat[{h}][:,{s},{a}]= { T_hat[h][:,s,a]}")
+                        
         # update empirical observation matrix.   \widehat{\mathbb{O}}^k_{h}: h=1,2,...H,H+1
         for h in range(H+1):
             #print(f"size: Nos[h]={Nos[h].shape}, ones={Nos_ones.shape}, sum={torch.sum(Nos[h],dim=0,keepdim=True).shape}")
             Ns[h]=(torch.max(Nos_ones, torch.sum(Nos[h],dim=0,keepdim=True)))
             O_hat[h]=Nos[h]/Ns[h]
-        
+            # force normalization in case some (s) is not yet visited. i.e. some Nos[h][s]==0
+            for s in range(nS):
+                #print(f"O_hat[{h}][:,{s}]={O_hat[h][:,s]}, sum=={sum(O_hat[h][:,s])}")
+                normalize_sum=sum(O_hat[h][:,s])
+                if normalize_sum==0:
+                    O_hat[h][:,s]=torch.ones_like(O_hat[h][:,s])/nO
+                    #print(f"is zero,  change to {O_hat[h][:,s]}")
+                else:
+                    O_hat[h][:,s]=O_hat[h][:,s]/normalize_sum
+                    #print(f"not zero,  change to {O_hat[h][:,s]}")
         # [Evaluation] compute the average Frobenius error until this iter.
         mu_err[k]=torch.linalg.norm(mu-mu_hat)/mu.numel()
         T_err[k]=torch.linalg.norm(T-T_hat)/T.numel()
@@ -152,8 +173,8 @@ def log_output(mu_err,T_err,O_err, H:int)->None:
         plt.ylabel(r'$\frac{1}{d} \| \widehat{p}^k(\cdot)-p(\cdot) \|_2$')
         plt.legend(loc='upper right', labels=labels_plt)
         import datetime
-        current_time_str=(datetime.datetime.now())[:-7].replace(' ', '-').replace(':', '-')
-        plt.savefig('plots/Monte-Carlo-Estimation-Error'+current_time_str+'.jpg')
+        from func import current_time_str
+        plt.savefig('plots/Monte-Carlo-Estimation-Error'+current_time_str()+'.jpg')
         plt.show()
 
 

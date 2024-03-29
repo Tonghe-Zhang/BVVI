@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import yaml
+from func import save_model_rewards
 
 # load hyper parameters from a yaml file.
 with open("config\hyper_param.yaml", 'r') as file:
@@ -118,6 +119,18 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
     
     return (init_dist.to(torch.float64),trans_kernel.to(torch.float64),emit_kernel.to(torch.float64))
 
+def initialize_model_reward(nS,nO,nA,H,model_init_type='random', reward_init_type='random'):
+    # obtain the true environment. invisible for the agent. Immutable. Only used during sampling.
+    real_env_kernels=initialize_model(nS,nO,nA,H,init_type=model_init_type)
+
+    # initiliaze the reward
+    real_env_reward=initialize_reward(nS,nA,H,reward_init_type)
+
+    # record the generated kernels and rewards.
+    save_model_rewards(real_env_kernels, real_env_reward, 'real_env')
+    
+    return real_env_kernels, real_env_reward
+
 def sample_trajectory(horizon:int, policy, model, reward, output_reward=False):
     '''
     inputs:
@@ -170,8 +183,6 @@ def sample_trajectory(horizon:int, policy, model, reward, output_reward=False):
     if output_reward:
         return sampled_reward
     return full_traj
-
-
 
 def initialize_policy(nO:int,nA:int,H:int):
     '''
