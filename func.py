@@ -55,8 +55,6 @@ def test_model_normalized(model_being_tested:tuple, nS:int,nA:int,H:int):
     test_normalization_T(T_hat,nS,nA,H)
     test_normalization_O(O_hat,nS,H)
 
-
-
 # (x)^+ and (x)^- functions.
 def negative_func(x:np.float64)->np.float64:
     return np.min(x,0)
@@ -262,7 +260,6 @@ def test_policy_normalized(policy_test:list, size_obs:int, size_act:int)->bool:
                 raise(ValueError)
                 return normalized_flag
     return True
-
 
 def test_log_output():
     log_output_tested_rewards(averge_risk_measure_of_each_episode=np.array([1,3,2,4,7]), H=5)
