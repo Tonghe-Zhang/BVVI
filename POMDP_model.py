@@ -130,7 +130,7 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
         raise(NotImplementedError)
     return (init_dist.to(torch.float64),trans_kernel.to(torch.float64),emit_kernel.to(torch.float64))
 
-def initialize_model_reward(nS,nO,nA,H,model_init_type='random', reward_init_type='random'):
+def initialize_model_reward(nS,nO,nA,H,model_init_type='random_homogeneous', reward_init_type='random_homogeneous')->tuple[tuple, torch.Tensor]:
     # obtain the true environment. invisible for the agent. Immutable. Only used during sampling.
     real_env_kernels=initialize_model(nS,nO,nA,H,init_type=model_init_type)
 
@@ -140,7 +140,7 @@ def initialize_model_reward(nS,nO,nA,H,model_init_type='random', reward_init_typ
     # record the generated kernels and rewards.
     save_model_rewards(real_env_kernels, real_env_reward, 'real_env')
     
-    return real_env_kernels, real_env_reward
+    return (real_env_kernels, real_env_reward)
 
 def sample_trajectory(horizon:int, policy, model, reward, output_reward=False):
     '''

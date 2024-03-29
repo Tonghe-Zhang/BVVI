@@ -29,10 +29,12 @@ def main(config_filename='hyper_param_naive',
     hyper_param= load_hyper_param('config\\'+config_filename+'.yaml')    # can delete the naive
     nS,nO,nA,H,K,nF,delta,gamma,iota =hyper_param
 
-    # initialize true model and rewards if necessary
+    # initialize true model and/or rewards if necessary
     if model_true ==None:
-        model_true,reward_true=initialize_model_reward(nS,nO,nA,H,model_init_type='random_homogeneous', reward_init_type='random_homogeneous')
-
+        model_true,_=initialize_model_reward(nS,nO,nA,H,model_init_type='random_homogeneous', reward_init_type='random_homogeneous')
+    if reward_true ==None:
+        _, reward_true=initialize_model_reward(nS,nO,nA,H,model_init_type='random_homogeneous', reward_init_type='random_homogeneous')
+    
     # [Evaluation] Reset the parameter errors and accumulated returns tested in the true envirnoemt of each iteration.
     mu_err=np.zeros([K])
     T_err=np.zeros([K])
@@ -93,7 +95,6 @@ def main(config_filename='hyper_param_naive',
         log_file.close()
     return policy_learnt
 
-
 def test_with_naive_env():
     mu_true=torch.tensor([1,0,0])
     T_true=torch.stack([torch.tensor([[0,0,1],[1,0,0],[0,1,0]]).unsqueeze(-1).repeat(1,1,2) for _ in range(3)])
@@ -124,19 +125,16 @@ def test_with_naive_env():
     # print(policy_learnt)
 
 def test_with_medium_random_env():
-
-    model_true,reward_true=initialize_model_reward()
-
-    policy_learnt=main(config_filename= 'hyper_param_naive',
-                        model_true=model_true,
-                        reward_true=reward_true,
+    policy_learnt=main(config_filename= 'hyper_param_medium',
+                        model_true=None,
+                        reward_true=None,
                         model_load=None,
                         policy_load=None,
                         output_to_log_file=True,
-                        log_episode_filename= 'log_episode_naive',
+                        log_episode_filename= 'log_episode_medium',
                         prt_progress=False,
                         prt_policy_normalization=False,
-                        weight_output_parent_directory='learnt\\naive'
+                        weight_output_parent_directory='learnt\\medium'
                         )
 
 
