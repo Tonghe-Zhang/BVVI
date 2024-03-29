@@ -31,9 +31,16 @@ def main(config_filename='hyper_param_naive',
 
     # initialize true model and/or rewards if necessary
     if model_true ==None:
+        print(f"no model_true input, initialize a new one")
         model_true,_=initialize_model_reward(nS,nO,nA,H,model_init_type='random_homogeneous', reward_init_type='random_homogeneous')
+    if model_true==None:
+        raise(ValueError)
+    
     if reward_true ==None:
+        print(f"no reward_true input, initialize a new one")
         _, reward_true=initialize_model_reward(nS,nO,nA,H,model_init_type='random_homogeneous', reward_init_type='random_homogeneous')
+    if reward_true==None:
+        raise(ValueError)
     
     # [Evaluation] Reset the parameter errors and accumulated returns tested in the true envirnoemt of each iteration.
     mu_err=np.zeros([K])
@@ -136,7 +143,6 @@ def test_with_medium_random_env():
                         prt_policy_normalization=False,
                         weight_output_parent_directory='learnt\\medium'
                         )
-
 
 if __name__ == "__main__":
     # test_with_naive_env()

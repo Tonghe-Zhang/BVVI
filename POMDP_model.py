@@ -1,20 +1,7 @@
 import numpy as np
 import torch
 import yaml
-from func import save_model_rewards
-
-# load hyper parameters from a yaml file.
-with open("config\hyper_param.yaml", 'r') as file:
-    hyper_param = yaml.safe_load(file)
-nA=hyper_param['sizes']['size_of_action_space']
-nS=hyper_param['sizes']['size_of_state_space']
-nO=hyper_param['sizes']['size_of_observation_space']
-H=hyper_param['sizes']['horizon_len']
-K=hyper_param['sizes']['num_episode']
-nF=pow((nO*nA),H) #size_of_history_space
-delta=hyper_param['sizes']['confidence_level']
-gamma=hyper_param['sizes']['discount_factor']
-iota =np.log(K*H*nS*nO*nA/delta)
+from func import save_model_rewards,load_hyper_param
 
 def get_random_dist(dim:int,dist_type:str)->np.array:
     '''
@@ -50,23 +37,25 @@ def initialize_reward(nS:int, nA:int, H:int, init_type:str)->torch.Tensor:
     description:
         reward[h][s][a] stands for r_h(s,a), which picks value in [0,1]
     '''
+
+    reward=None
     if init_type=='uniform':
         r_unif=np.random.rand()
         reward=torch.ones([H,nS,nA])*r_unif
-        return reward        
     elif init_type=='random':
         reward=torch.zeros([H,nS,nA])
         for h in range(H):
             reward[h]=torch.rand([nS,nA])
-        return reward
     elif init_type=='random_homogeneous':
         reward=torch.rand([nS,nA]).repeat(H,1,1)
     elif init_type=='ergodic':
         reward_layer=torch.rand([nS,nA]).unsqueeze(0)
         reward = reward_layer.repeat(H,1,1)
-        return reward
     else:
         raise(NotImplementedError)
+    if reward==None:
+        raise(ValueError)
+    return reward        
 
 
 def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
@@ -128,9 +117,15 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
         emit_kernel=torch.transpose(torch.tensor(np.array([get_random_dist(dim=nO,dist_type=init_type) for _ in range(nS)])).repeat(horizon+1,1,1),1,2)
     else:
         raise(NotImplementedError)
-    return (init_dist.to(torch.float64),trans_kernel.to(torch.float64),emit_kernel.to(torch.float64))
+    
+    model_ret=(init_dist.to(torch.float64),trans_kernel.to(torch.float64),emit_kernel.to(torch.float64))
+    
+    if model_ret==None:
+        raise(ValueError)
+    
+    return model_ret
 
-def initialize_model_reward(nS,nO,nA,H,model_init_type='random_homogeneous', reward_init_type='random_homogeneous')->tuple[tuple, torch.Tensor]:
+def initialize_model_reward(nS,nO,nA,H,model_init_type='random_homogeneous', reward_init_type='random_homogeneous'):
     # obtain the true environment. invisible for the agent. Immutable. Only used during sampling.
     real_env_kernels=initialize_model(nS,nO,nA,H,init_type=model_init_type)
 
@@ -140,7 +135,7 @@ def initialize_model_reward(nS,nO,nA,H,model_init_type='random_homogeneous', rew
     # record the generated kernels and rewards.
     save_model_rewards(real_env_kernels, real_env_reward, 'real_env')
     
-    return (real_env_kernels, real_env_reward)
+    return real_env_kernels, real_env_reward
 
 def sample_trajectory(horizon:int, policy, model, reward, output_reward=False):
     '''
@@ -293,7 +288,10 @@ def show_trajectory(*args,record_reward=False):
         print(f"action={traj[2]}")
 
 
-def test_sampling():
+def test_sampling(config_filename:str):
+
+    nS,nO,nA,H,K,nF,delta,gamma,iota= load_hyper_param('config\\'+config_filename+'.yaml')    # can delete the naive
+
     model=initialize_model(nS,nO,nA,H,init_type='uniform')
     
     policy=initialize_policy(nO,nA,H)
@@ -309,7 +307,7 @@ def test_sampling():
         traj=sample_trajectory(H,policy,model,reward,output_reward=with_reward)
         show_trajectory(traj, record_reward=with_reward)
 
-def test_policy():
+def test_policy(config_filename:str):
     '''
     view the shapes of the policies. 
     run this function we should obtain:
@@ -320,6 +318,9 @@ def test_policy():
     @ h=3, policy[3].shape=torch.Size([4, 2, 4, 2, 4, 2, 4, 2])      
     @ h=4, policy[4].shape=torch.Size([4, 2, 4, 2, 4, 2, 4, 2, 4, 2])
     '''
+
+    nS,nO,nA,H,K,nF,delta,gamma,iota= load_hyper_param('config\\'+config_filename+'.yaml')    # can delete the naive
+
     policy=initialize_policy(nO,nA,H)
     normalized=True
     for h in range(H):

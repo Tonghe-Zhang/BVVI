@@ -17,7 +17,7 @@ from func import save_model_rewards, load_model_rewards, save_model_policy, load
 
 def BVVI(hyper_param:tuple,
          model_true:tuple,
-         reward_true,
+         reward_true:torch.Tensor,
          model_load:tuple,
          policy_load,
          evaluation_metrics,
@@ -35,6 +35,14 @@ def BVVI(hyper_param:tuple,
     output: ternary tensor tuple 
         (policy_learnt, model_learnt, evaluation_results)
     '''
+
+    if model_true==None:
+        raise(ValueError)
+    if reward_true==None:
+        raise(ValueError)
+
+
+
 
     # unpack hyper parameters
     nS,nO,nA,H,K,nF,delta,gamma,iota =hyper_param
@@ -103,6 +111,7 @@ def BVVI(hyper_param:tuple,
                 prev_hist, act, obs=hist[0:-2], hist[-2], hist[-1]   
                 # use Eqs.~\eqref{40} in the original paper to simplify the update rule.
                 # be aware that we should use @ but not * !!!   * is Hadamard product while @ is matrix/vector product.
+                
                 sigma_hat[h][hist]=np.float64(nO)*torch.diag(O_hat[h][obs,:]).to(dtype=torch.float64) @ T_hat[h-1,:,:,act].to(dtype=torch.float64)  @  torch.diag(torch.exp(gamma* reward_true[h-1,:,act])).to(dtype=torch.float64) @ sigma_hat[h-1][prev_hist].to(dtype=torch.float64)
         # line 11 of the original paper
         bonus_res_t=torch.min(torch.ones([H,nS,nA]), 3*torch.sqrt(nS*H*iota / Nsa))
