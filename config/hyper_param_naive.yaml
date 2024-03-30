@@ -3,6 +3,6 @@ sizes:
   size_of_state_space: 3
   size_of_observation_space: 3
   horizon_len: 4
-  num_episode: 100
+  num_episode: 600
   confidence_level: 0.2
   discount_factor: 1.0

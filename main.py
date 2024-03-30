@@ -105,11 +105,14 @@ def main(config_filename='hyper_param_naive',
 
 def test_with_naive_env():
     from func import Normalize_T
-    H=4
+    config_filename='hyper_param_naive'
+    nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param('config\\'+config_filename+'.yaml')    # can delete the naive
+
+    # Initial Distribution
     mu_true=torch.tensor([1,0,0])
 
-    # Deterministic Transition
-    stochastic_trans=False
+    # Transition
+    stochastic_trans=True
     if stochastic_trans==False:
         T_true=torch.stack([torch.tensor([[0,0,1],
                                         [1,0,0],
@@ -121,6 +124,7 @@ def test_with_naive_env():
                                         [0.02,0.94,0.01]]).to(torch.float64).unsqueeze(-1).repeat(1,1,2) for _ in range(H)])
         T_true=Normalize_T(T_true)
 
+    # Emission
     O_true=torch.stack([torch.tensor([[0.4,0.2,0.4],[0.3,0.5,0.2],[0.2,0.7,0.1]]).transpose(0,1).repeat(1,1) for _ in range(H+1)])
     
     # picky rewards (much easier than 0/1)
@@ -143,7 +147,9 @@ def test_with_naive_env():
                         )
     
     # if we are training from naive params, also run this line:
-    log_output_test_reward_pretty(H=T_true.shape[0],K_end=200,gamma=1.0, plot_optimal_policy=True, optimal_value=np.exp(T_true.shape[0]), log_episode_file_name='log_episode_naive')
+    # Note: this only works for gamma=1. otherwise change
+    log_output_test_reward_pretty(H=H,K_end=300,gamma=1.0, plot_optimal_policy=True, optimal_value=1/gamma*np.exp(gamma*H),
+                                  log_episode_file_name='log_episode_naive')
 
     print('%'*100)
     print("short test of policy")
@@ -173,6 +179,41 @@ def test_with_medium_random_env(from_scratch=False):
 if __name__ == "__main__":
     test_with_naive_env()
     # test_with_medium_random_env()
+    config_filename='hyper_param_naive'
+    nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param('config\\'+config_filename+'.yaml')    # can delete the naive
+    K_end=500
+    log_episode_file_name='log_episode_naive'
+    optimal_value=1/gamma*np.exp(gamma*H)
+    log_file_directory='log\\'+log_episode_file_name+'.txt'
+
+    with open(log_file_directory,mode='r') as log_episode_file:
+        averge_risk_measure_of_each_episode=np.loadtxt(log_file_directory)[0:K_end+1,0]
+
+        regret_curve=optimal_value-averge_risk_measure_of_each_episode
+
+        regret_curve_smooth=np.cumsum(regret_curve)/(1+np.arange(len(regret_curve)))
+        
+        indices=np.arange(regret_curve_smooth.shape[0])
+
+        plt.plot(indices, regret_curve_smooth,label='BVVI(ours)') 
+        
+        # upper and lower bounds of the accumulated risk measure.
+        plt.ylim((0.0,optimal_value*1.3))
+
+        plt.title(f'Accumulated Risk-Sensitive Reward of Policies')   # . Horizon H={H}
+        
+        plt.xlabel(f'Episode $k$')    # H transitions per iteration.   Samples N (=iteration $K$ * {H})
+        
+        plt.ylabel(f'Regret')         # $\sum_{h=1}^{H}r_h(\mathbf{S}_h,\mathbf{A}_h)$
+        
+        plt.legend(loc='upper right')
+
+        plt.savefig('plots/Reward'+current_time_str()+'.jpg')
+
+        plt.show()
+
+        plt.plot(averge_risk_measure_of_each_episode)
+        plt.show()
 
 
 ''''
