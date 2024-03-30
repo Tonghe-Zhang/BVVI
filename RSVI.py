@@ -2,11 +2,9 @@
 
 
 def RSVI(P, nS, nA, gamma=0.9, eps=1e-3):
+    import numpy as np
     '''
-    Risk sensitive value iteration from Fei et al. ref: 
-    
-    
-    
+    Risk sensitive value iteration in the tabular setting, adapted from Fei et al. ref: 
     '''
     value_function = np.zeros(nS)
     policy = np.zeros(nS, dtype=int)
