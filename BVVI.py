@@ -32,7 +32,9 @@ def BVVI(hyper_param:tuple,
         hyper_param: tuple. (nS,nO,nA,H,K,nF,delta,gamma,iota). 
         model_true:  (mu, T, O) ternary tensor tuple.   the kernels of the true environment.
         reward_true: 3D tensor. the reward matrices of the true environmet. 
-
+        log_episode_file:string, the filename to which logging information of each episode is output. 
+                        the format of log_episode_file:      [tested risk-measure of policy k    mu_err[k]   T_err[k]   O_err[k] ]
+                                                                                        ...         ...         ...         ... 
     output: ternary tensor tuple 
         (policy_learnt, model_learnt, evaluation_results)
     '''
@@ -278,7 +280,7 @@ def BVVI(hyper_param:tuple,
         if (k % 200==0):
             save_model_policy((mu_hat, T_hat, O_hat), policy_learnt, weight_output_parent_directory)
         if prt_progress:
-            print(f"\tSuccessfuly saved newest kernels and policies to folder: {'./learnt'}")
+            print(f"\tSuccessfuly saved the newest kernels and policies to folder: {'./learnt'}")
     # %%%%%% End of training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if prt_progress:
         print(f"End of training. number of iters K={K}")

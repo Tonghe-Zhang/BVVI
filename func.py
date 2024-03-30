@@ -7,6 +7,14 @@ import yaml
 import torch
 import sys
 
+def moving_average(time_series:np.array, window_width:int)->np.array:
+    '''
+    input an array of length L, with window width being W, then
+    output array of length L-W+1.
+    '''
+    test = np.cumsum(time_series, dtype=float)
+    test[window_width:] = test[window_width:] - test[:-window_width]
+    return test[window_width - 1:] / window_width
 
 def Normalize_T(T):
     shape=T.shape

@@ -1,4 +1,4 @@
-Start BVVI test. Current time=2024-03-30-20-07-19
+Start BVVItest. Current time=2024-03-30-23-32-31
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Test Algorithm.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -8,13 +8,13 @@ sizes:
   size_of_state_space: 3
   size_of_observation_space: 3
   horizon_len: 4
-  num_episode: 300
+  num_episode: 1000
   confidence_level: 0.2
   risk_sensitivity_factor: 1.0
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Call function beta_vector_value_iteration...
 beta_vector_value_iteration...returned.
-End BVVI test. Current time=2024-03-30-20-11-48
+End BVVI test. Current time=2024-03-30-23-46-55
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Call function visualize_performance...
 visualize_performance...returned.
