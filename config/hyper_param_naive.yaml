@@ -5,4 +5,4 @@ sizes:
   horizon_len: 4
   num_episode: 600
   confidence_level: 0.2
-  discount_factor: 1.0
+  risk_sensitivity_factor: 1.0

@@ -177,7 +177,7 @@ def test_with_medium_random_env(from_scratch=False):
                         )
     
 if __name__ == "__main__":
-    test_with_naive_env()
+    # test_with_naive_env()
     # test_with_medium_random_env()
     config_filename='hyper_param_naive'
     nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param('config\\'+config_filename+'.yaml')    # can delete the naive
@@ -188,6 +188,13 @@ if __name__ == "__main__":
 
     with open(log_file_directory,mode='r') as log_episode_file:
         averge_risk_measure_of_each_episode=np.loadtxt(log_file_directory)[0:K_end+1,0]
+        '''
+        Plot regret, suppose that we know the optimal value funciton.
+        '''
+
+        plot_regret=False
+
+        risk_measure_smooth=np.cumsum(averge_risk_measure_of_each_episode)/(1+np.arange(len(averge_risk_measure_of_each_episode)))
 
         regret_curve=optimal_value-averge_risk_measure_of_each_episode
 
@@ -195,25 +202,32 @@ if __name__ == "__main__":
         
         indices=np.arange(regret_curve_smooth.shape[0])
 
-        plt.plot(indices, regret_curve_smooth,label='BVVI(ours)') 
+        if plot_regret:
+            plt.plot(indices, regret_curve_smooth,label='BVVI(ours)') 
+        else:
+            plt.plot(indices,  risk_measure_smooth,label='BVVI(ours)') 
         
         # upper and lower bounds of the accumulated risk measure.
-        plt.ylim((0.0,optimal_value*1.3))
 
-        plt.title(f'Accumulated Risk-Sensitive Reward of Policies')   # . Horizon H={H}
+        plt.ylim((0.0,optimal_value*0.9))
+
+        plt.title(f'Performance of Output Policies')   # . Horizon H={H}
         
         plt.xlabel(f'Episode $k$')    # H transitions per iteration.   Samples N (=iteration $K$ * {H})
         
-        plt.ylabel(f'Regret')         # $\sum_{h=1}^{H}r_h(\mathbf{S}_h,\mathbf{A}_h)$
-        
+        if plot_regret:
+            plt.ylabel(f'Regret')         # $\sum_{h=1}^{H}r_h(\mathbf{S}_h,\mathbf{A}_h)$
+        else:
+            plt.ylabel(f'Risk Measure')
+
         plt.legend(loc='upper right')
 
         plt.savefig('plots/Reward'+current_time_str()+'.jpg')
 
         plt.show()
 
-        plt.plot(averge_risk_measure_of_each_episode)
-        plt.show()
+        # plt.plot(averge_risk_measure_of_each_episode)
+        # plt.show()
 
 
 ''''

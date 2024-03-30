@@ -5,7 +5,7 @@
   horizon_len: 3
   num_episode: 10
   confidence_level: 0.2
-  discount_factor: 1.0
+  risk_sensitivity_factor: 1.0
 
 # Set the kernels: Run these commands:
 H=3

@@ -92,7 +92,7 @@ def load_hyper_param(hyper_param_file_name:str)->tuple:
     K=hyper_param['sizes']['num_episode']
     nF=pow((nO*nA),H) #size_of_history_space
     delta=hyper_param['sizes']['confidence_level']
-    gamma=hyper_param['sizes']['discount_factor']
+    gamma=hyper_param['sizes']['risk_sensitivity_factor']
     iota =np.log(K*H*nS*nO*nA/delta)
     return (nS,nO,nA,H,K,nF,delta,gamma,iota)
 
