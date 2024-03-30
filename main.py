@@ -7,7 +7,7 @@ import sys
 import time
 from tqdm import tqdm
 
-from func import load_hyper_param, short_test, visualize_performance, log_output_test_reward_pretty, current_time_str, Logger
+from func import load_hyper_param, short_test, visualize_performance, log_output_test_reward_pretty, current_time_str, Logger, load_model_rewards, load_model_policy
 from POMDP_model import initialize_model_reward
 from BVVI import BVVI
 
@@ -20,6 +20,7 @@ def main(config_filename='hyper_param_naive',
          log_episode_filename='log_episode_naive',
          prt_progress=True,
          prt_policy_normalization=True,
+         true_weight_output_parent_directory='real_env',
          weight_output_parent_directory='learnt\\naive'
          ):
     '''
@@ -78,9 +79,10 @@ def main(config_filename='hyper_param_naive',
                             policy_load=policy_load,\
                                 evaluation_metrics=evaluation_metrics,\
                                     log_episode_file=log_episode_file,\
-                                        weight_output_parent_directory=weight_output_parent_directory,\
-                                            prt_progress=prt_progress,\
-                                                prt_policy_normalization=prt_policy_normalization)
+                                        true_weight_output_parent_directory=true_weight_output_parent_directory,\
+                                            weight_output_parent_directory=weight_output_parent_directory,\
+                                                prt_progress=prt_progress,\
+                                                    prt_policy_normalization=prt_policy_normalization)
         # log_episode_file.write(f"\n\nEnd Testing BVVI. Current time={current_time_str()}")
         log_episode_file.close()
     episode_data=np.loadtxt('log\\'+log_episode_filename+'.txt', dtype=np.float64)
@@ -89,7 +91,6 @@ def main(config_filename='hyper_param_naive',
     print('%'*100)
     print('Call function visualize_performance...')
 
-    
     visualize_performance(evaluation_results,H)
 
     print('visualize_performance...returned.')
@@ -103,11 +104,28 @@ def main(config_filename='hyper_param_naive',
     return policy_learnt
 
 def test_with_naive_env():
+    from func import Normalize_T
+    H=4
     mu_true=torch.tensor([1,0,0])
-    T_true=torch.stack([torch.tensor([[0,0,1],[1,0,0],[0,1,0]]).unsqueeze(-1).repeat(1,1,2) for _ in range(3)])
-    O_true=torch.stack([torch.tensor([[0.4,0.2,0.4],[0.3,0.5,0.2],[0.2,0.7,0.1]]).transpose(0,1).repeat(1,1) for _ in range(4)])
-    R_true=torch.tensor([[1,0],[0,1],[1,0]]).unsqueeze(0).repeat(3,1,1)
 
+    # Deterministic Transition
+    stochastic_trans=False
+    if stochastic_trans==False:
+        T_true=torch.stack([torch.tensor([[0,0,1],
+                                        [1,0,0],
+                                        [0,1,0]]).unsqueeze(-1).repeat(1,1,2) for _ in range(H)])
+    else:
+        # Stochastic Transition(much harder)
+        T_true=torch.stack([torch.tensor([[0.03,0.04,0.89],
+                                        [0.95,0.02,0.10],
+                                        [0.02,0.94,0.01]]).to(torch.float64).unsqueeze(-1).repeat(1,1,2) for _ in range(H)])
+        T_true=Normalize_T(T_true)
+
+    O_true=torch.stack([torch.tensor([[0.4,0.2,0.4],[0.3,0.5,0.2],[0.2,0.7,0.1]]).transpose(0,1).repeat(1,1) for _ in range(H+1)])
+    
+    # picky rewards (much easier than 0/1)
+    R_true=torch.tensor([[1,-10],[-10,1],[1,-10]]).unsqueeze(0).repeat(H,1,1)
+    
     model_true=(mu_true, T_true, O_true)
     reward_true=R_true
 
@@ -120,18 +138,25 @@ def test_with_naive_env():
                         log_episode_filename= 'log_episode_naive',
                         prt_progress=False,
                         prt_policy_normalization=False,
+                        true_weight_output_parent_directory='real_env\\naive_real',
                         weight_output_parent_directory='learnt\\naive'
                         )
     
     # if we are training from naive params, also run this line:
-    log_output_test_reward_pretty(H=T_true.shape[0],gamma=1.0, plot_optimal_policy=True, optimal_value=np.exp(T_true.shape[0]), log_episode_file_name='log_episode_naive')
+    log_output_test_reward_pretty(H=T_true.shape[0],K_end=200,gamma=1.0, plot_optimal_policy=True, optimal_value=np.exp(T_true.shape[0]), log_episode_file_name='log_episode_naive')
 
     print('%'*100)
     print("short test of policy")
     short_test(policy_learnt,mu_true,T_true,O_true,R_true,only_reward=False)
     # print(policy_learnt)
 
-def test_with_medium_random_env():
+def test_with_medium_random_env(from_scratch=False):
+    if from_scratch:
+        model_true, reward_true=(None,None)
+        model_load, policy_load=(None,None)
+    else:
+        model_true, reward_true=load_model_rewards(parent_directory='real_env\medium_real')
+        model_load, policy_load=load_model_policy(parent_directory='learnt\medium')
     policy_learnt=main(config_filename= 'hyper_param_medium',
                         model_true=None,
                         reward_true=None,
@@ -141,11 +166,18 @@ def test_with_medium_random_env():
                         log_episode_filename= 'log_episode_medium',
                         prt_progress=False,
                         prt_policy_normalization=False,
-                        weight_output_parent_directory='learnt\\medium'
+                        true_weight_output_parent_directory='real_env\medium_real',
+                        weight_output_parent_directory='learnt\medium'
                         )
-
+    
 if __name__ == "__main__":
-    # test_with_naive_env()
-    test_with_medium_random_env()
+    test_with_naive_env()
+    # test_with_medium_random_env()
 
 
+''''
+Todo:
+1. in BVVI, policy from max to softmax
+   draw actions from sampling
+2. construct a determinisitc policy test case.
+'''

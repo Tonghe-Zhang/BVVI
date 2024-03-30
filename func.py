@@ -7,6 +7,18 @@ import yaml
 import torch
 import sys
 
+
+def Normalize_T(T):
+    shape=T.shape
+    H=shape[0]
+    nS=shape[1]
+    nA=shape[3]
+    for h in range(H):
+        for s in range(nS):
+            for a in range(nA):
+                T[h][:,s,a]=T[h][:,s,a]/(torch.sum(T[h][:,s,a]))
+    return T
+
 # test normalization
 def test_normalization_mu(mu:torch.Tensor):
     # check all elements non-negative
@@ -129,6 +141,7 @@ def log_output_tested_rewards(averge_risk_measure_of_each_episode:np.array,H:int
     plt.show()
 
 def log_output_test_reward_pretty(H:int,
+                                  K_end:int,
                                   gamma:float,
                                   plot_optimal_policy=True,
                                   optimal_value=0.0,
@@ -136,7 +149,7 @@ def log_output_test_reward_pretty(H:int,
                                   ):
     log_file_directory='log\\'+log_episode_file_name+'.txt'
     with open(log_file_directory,mode='r') as log_episode_file:
-        averge_risk_measure_of_each_episode=np.loadtxt(log_file_directory)[0:30,0]
+        averge_risk_measure_of_each_episode=np.loadtxt(log_file_directory)[0:K_end+1,0]
 
         loss_curve=averge_risk_measure_of_each_episode
 
@@ -264,6 +277,7 @@ def test_policy_normalized(policy_test:list, size_obs:int, size_act:int)->bool:
 def test_log_output():
     log_output_tested_rewards(averge_risk_measure_of_each_episode=np.array([1,3,2,4,7]), H=5)
 
+
 def test_output_log_file(output_to_log_file=True):
     import sys
     if output_to_log_file:
@@ -291,7 +305,6 @@ def test_output_log_file(output_to_log_file=True):
     if output_to_log_file is True:
         sys.stdout = old_stdout
         log_file.close()
-
 
 class Logger(object):
     
@@ -388,7 +401,6 @@ def short_test(policy,mu_true,T_true,O_true,R_true,only_reward=False):
     else:
         return full_traj
 
-
 def visualize_performance(evaluation_results, H:int):
     # unpack
     mu_err,T_err,O_err, tested_risk_measure=evaluation_results
@@ -399,7 +411,5 @@ def visualize_performance(evaluation_results, H:int):
 
     # plot parameter learning results
     log_output_param_error(mu_err,T_err,O_err, H)
-
-
 
 # test_log_output()

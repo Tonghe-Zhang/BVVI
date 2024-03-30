@@ -17,11 +17,13 @@ def get_random_dist(dim:int,dist_type:str)->np.array:
     else:
         raise(NotImplementedError)
 
-def sample_from(dist)->int:
+def sample_from(dist, open_debug=False)->int:
     '''
     generate one sample from a given distribution 'dist'.
     '''
-    # print(f"sample from dist={dist}")
+    if open_debug:
+        print(f"sample from dist={dist}")
+        print(f"sum={sum(dist)}")
     return int(np.random.choice(a=list(np.arange(len(dist))), size=1, p=(dist)))
 
 def initialize_reward(nS:int, nA:int, H:int, init_type:str)->torch.Tensor:
@@ -242,6 +244,7 @@ def sample_trajectory(horizon:int, policy, model, reward, output_reward=False):
                 # print(f"sample a reward of {sampled_reward[h]} at (h,s,a)={h,state,action}")
         # S_h+1 \sim \mathbb{T}_{h}(\cdot|s_{h},a_{h})
         if h<horizon:  #do not record s_{H+1}
+            # print(f"trans_kernel[{h}][:,{state},{action}]={trans_kernel[h][:,state,action]}")
             new_state=sample_from(trans_kernel[h][:,state,action])
             full_traj[0][h+1]=new_state
 

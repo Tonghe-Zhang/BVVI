@@ -22,6 +22,7 @@ def BVVI(hyper_param:tuple,
          policy_load,
          evaluation_metrics,
          log_episode_file,
+         true_weight_output_parent_directory='real_env',
          weight_output_parent_directory='learnt',
          prt_progress=True,
          prt_policy_normalization=True
@@ -41,16 +42,13 @@ def BVVI(hyper_param:tuple,
     if reward_true==None:
         raise(ValueError)
 
-
-
-
     # unpack hyper parameters
     nS,nO,nA,H,K,nF,delta,gamma,iota =hyper_param
 
     # used only during sampling.
     mu_true,T_true,O_true=model_true
     # save the true models and rewards used in this experiment.
-    save_model_rewards(kernels=model_true, reward_table=reward_true, parent_directory='real_env')
+    save_model_rewards(kernels=model_true, reward_table=reward_true, parent_directory=true_weight_output_parent_directory)
     # used only during evaluation
     mu_err, T_err, O_err, tested_risk_measure=evaluation_metrics
 
@@ -111,8 +109,16 @@ def BVVI(hyper_param:tuple,
                 prev_hist, act, obs=hist[0:-2], hist[-2], hist[-1]   
                 # use Eqs.~\eqref{40} in the original paper to simplify the update rule.
                 # be aware that we should use @ but not * !!!   * is Hadamard product while @ is matrix/vector product.
-                
-                sigma_hat[h][hist]=np.float64(nO)*torch.diag(O_hat[h][obs,:]).to(dtype=torch.float64) @ T_hat[h-1,:,:,act].to(dtype=torch.float64)  @  torch.diag(torch.exp(gamma* reward_true[h-1,:,act])).to(dtype=torch.float64) @ sigma_hat[h-1][prev_hist].to(dtype=torch.float64)
+                '''
+                print(f"O_hat[h][obs,:].shape={O_hat[h][obs,:].shape}")
+                print(f"T_hat[h-1,:,:,act].shape={T_hat[h-1,:,:,act].shape}")
+                print(f"reward_true[h-1,:,act].shape={reward_true[h-1,:,act].shape}")
+                '''
+                sigma_hat[h][hist]=np.float64(nO)*\
+                    torch.diag(O_hat[h][obs,:]).to(dtype=torch.float64)\
+                        @ T_hat[h-1,:,:,act].to(dtype=torch.float64)  \
+                            @  torch.diag(torch.exp(gamma* reward_true[h-1,:,act])).to(dtype=torch.float64) \
+                                @ sigma_hat[h-1][prev_hist].to(dtype=torch.float64)
         # line 11 of the original paper
         bonus_res_t=torch.min(torch.ones([H,nS,nA]), 3*torch.sqrt(nS*H*iota / Nsa))
         bonus_res_o=torch.min(torch.ones([H+1,nS]), 3*torch.sqrt(nO*H*iota/Ns))
