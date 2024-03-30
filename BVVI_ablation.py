@@ -1,3 +1,4 @@
+
 import torch
 import numpy as np   
 import yaml 
@@ -14,6 +15,10 @@ from func import negative_func, positive_func, log_output_param_error, log_outpu
 from func import test_policy_normalized, test_output_log_file, current_time_str, Logger, short_test
 
 from func import save_model_rewards, load_model_rewards, save_model_policy, load_model_policy, test_normalization_O,test_normalization_T
+
+
+# take as if O==S
+# test define an \mathbb{O}=\delta test case
 
 def BVVI(hyper_param:tuple,
          model_true:tuple,
@@ -282,6 +287,7 @@ def BVVI(hyper_param:tuple,
     # %%%%%% End of training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if prt_progress:
         print(f"End of training. number of iters K={K}")
-    model_learnt=(mu_hat, T_hat, O_hat)
+    model_load=(mu_hat, T_hat, O_hat)
     evaluation_results=(mu_err,T_err,O_err,tested_risk_measure)
-    return (policy_learnt, model_learnt, evaluation_results)
+    return (policy_learnt, model_load, evaluation_results)
+
