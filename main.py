@@ -242,7 +242,7 @@ def naive_train_and_plot(Alg:str,
                             peaky_reward=peaky_reward)
 
     
-    optimal_value=1/gamma*np.exp(gamma*H)
+    optimal_value=1/gamma*np.log(np.exp(gamma*H))
     log_file_directory='log\\'+log_episode_file_name+'.txt'
 
     with open(log_file_directory,mode='r') as log_episode_file:
@@ -324,21 +324,23 @@ def BVVI_plot(window_width_MDP:int,
     POMDP_episodic_smooth=smooth(POMDP_single_episode_rewards, window_len=2,window='max_pooling')
     POMDP_episodic_smooth=smooth(POMDP_episodic_smooth, window_len=3,window='hamming')
     indices=np.arange(POMDP_episodic_smooth.shape[0])
-    plt.plot(indices,POMDP_episodic_smooth, linestyle='dotted',label='Partially Observable')
+    plt.plot(indices,POMDP_episodic_smooth, c='cornflowerblue',  linestyle='dotted',
+             label='Partially Observable')
     #plt.plot(np.arange(POMDP_single_episode_rewards.shape[0]),POMDP_single_episode_rewards, label='Partially Observable')
 
     # MDP: episodic return
     # plt.subplot(3,2,2)
     MDP_episodic_smooth=smooth(MDP_single_episode_rewards, window_len=30,window='hamming')
     indices=np.arange(MDP_episodic_smooth.shape[0])
-    plt.plot(indices,MDP_episodic_smooth, label='Fully Observable')
+    plt.plot(indices,MDP_episodic_smooth, c='darkorange', label='Fully Observable')
 
     # Optimal Policy
-    plt.axhline(y =optimal_value_MDP, color = 'r', linestyle = 'dashdot',label='Optimal Policy') 
+    plt.axhline(y =optimal_value_MDP, color = 'red', linestyle = 'dashdot',
+                label='Optimal Policy') 
     # MDP and POMDP
-    plt.ylim((min(min(POMDP_episodic_smooth),min(MDP_episodic_smooth))*0.8,
-              (max(max(POMDP_episodic_smooth),max(MDP_episodic_smooth)))*1.2))
-    plt.title(f'Episodic Returns of BVVI')
+    plt.ylim((min(min(POMDP_episodic_smooth),min(MDP_episodic_smooth))*0.95,
+              (max(max(POMDP_episodic_smooth),max(MDP_episodic_smooth)))*1.10))
+    plt.title(f'Episodic Return of BVVI')
     plt.xlabel(f'Episode $k$')                             # H transitions per iteration.   Samples N (=iteration $K$ * {H})
     plt.ylabel(f'Episodic Return')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
     plt.legend(loc='upper right')
@@ -356,7 +358,8 @@ def BVVI_plot(window_width_MDP:int,
     MDP_regret=np.cumsum(optimal_value_MDP-MDP_single_episode_rewards)
     indices=np.arange(MDP_regret.shape[0])
     scatter_size=np.ones_like(indices)*1
-    plt.scatter(indices, MDP_regret,linestyle='dotted', c='orange', s=scatter_size, label='Fully Observable(Raw Data)')    # plt.plot(indices, MDP_regret, label='Fully observable(Raw Data)')
+    plt.scatter(indices, MDP_regret,linestyle='dotted', c='orange', s=scatter_size,
+                label='Raw Data')    # plt.plot(indices, MDP_regret, label='Fully observable(Raw Data)')
     
     # # MDP: smoothing
     # MDP_regret_smooth=smooth(MDP_regret, window_len=30,window='hamming')
@@ -368,11 +371,12 @@ def BVVI_plot(window_width_MDP:int,
     indices=np.arange(MDP_regret.shape[0])
     fit_param, fit_curve = curve_fit(square_rt, indices, MDP_regret)
     MDP_regret_fit=square_rt(indices, *fit_param)
-    plt.plot(indices, MDP_regret_fit,c='darkorange', label='Fully Observable(Fitted)') #: a=%5.3f, b=%5.3f, d=%5.3f' % tuple(fit_param)
+    plt.plot(indices, MDP_regret_fit,c='darkorange',
+             label=r'Fitted with ${O}\left(\sqrt{K}\right)$') #: a=%5.3f, b=%5.3f, d=%5.3f' % tuple(fit_param)
     
     # plot MDP regret
     plt.ylim((min(min(MDP_regret),min(MDP_regret))*0.3,(max(max(MDP_regret),max(MDP_regret)))*1.2))
-    plt.title(f'Regret of BVVI')
+    plt.title(f'Fully Observable Environment')
     plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
     plt.ylabel(f'Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
     plt.legend(loc='upper right')
@@ -385,7 +389,8 @@ def BVVI_plot(window_width_MDP:int,
     POMDP_regret=np.cumsum(optimal_value_POMDP-POMDP_single_episode_rewards)
     indices=np.arange(POMDP_regret.shape[0])
     scatter_size=np.ones_like(indices)*0.02
-    plt.scatter(indices, POMDP_regret,linestyle='dotted', s=scatter_size, label='Partially Observable(Raw Data)')    # plt.plot(indices, POMDP_regret, label='Partially Observable(Raw Data)')
+    plt.scatter(indices, POMDP_regret,linestyle='dotted', s=scatter_size,
+                label='Raw Dat)')    # plt.plot(indices, POMDP_regret, label='Partially Observable(Raw Data)')
     # # POMDP: smoothing
     # POMDP_regret_smooth=smooth(POMDP_regret, window_len=30,window='hamming')
     # indices=np.arange(POMDP_regret_smooth.shape[0])
@@ -399,10 +404,11 @@ def BVVI_plot(window_width_MDP:int,
     # Plot POMDP Regret
     plt.plot(indices, POMDP_regret_fit,c='royalblue', label='Partially Observable(Fitted)') #: a=%5.3f, b=%5.3f, d=%5.3f' % tuple(fit_param)
     plt.ylim((min(min(POMDP_regret),min(POMDP_regret))*0.3,(max(max(POMDP_regret),max(POMDP_regret)))*1.2))
-    plt.title(f'Regret of BVVI')
+    plt.title(f'Partially Observable Environment')
     plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
     plt.ylabel(f'Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
     plt.legend(loc='upper right')
+    plt.suptitle('Regret of BVVI')
     plt.savefig('plots/FinalRegret'+current_time_str()+'.jpg')
     plt.show()
     
@@ -412,19 +418,21 @@ def BVVI_plot(window_width_MDP:int,
     MDP_PAC_raw=np.cumsum(optimal_value_MDP-MDP_single_episode_rewards)/(1+np.arange(len(MDP_single_episode_rewards)))
     indices=np.arange(MDP_PAC_raw.shape[0])
     # plt.plot(indices, MDP_PAC_smooth,label='Fully Observable')
-    plt.semilogx(indices, MDP_PAC_raw,c='orange', linestyle='dotted', label='Fully Observable(Raw Data)')
+    plt.semilogx(indices, MDP_PAC_raw,c='orange', linestyle='dotted',
+                 label='Raw Data')
     # MDP fit
     def inverse_sqrt(x,a,b,c,d):
         return a*(1/np.sqrt(b*x+c))+d
     indices=np.arange(MDP_PAC_raw.shape[0])
     fit_param, fit_curve = curve_fit(inverse_sqrt, indices, MDP_PAC_raw)
     MDP_PAC_fit=inverse_sqrt(indices, *fit_param)
-    plt.semilogx(indices, MDP_PAC_fit,c='darkorange', linestyle='solid', label='Fully Observable(Fitted)')
+    plt.semilogx(indices, MDP_PAC_fit,c='darkorange', linestyle='solid', 
+                 label=r'Fitted with ${O}\left(\frac{1}{\sqrt{K}}\right)$')
 
     #plot POMDP and MDP PAC
     plt.xlim(1,1000)
     plt.ylim((min(min(MDP_PAC_raw),min(MDP_PAC_raw))*0.4,(max(max(MDP_PAC_raw),max(MDP_PAC_raw)))*0.6))
-    plt.title(f'PAC Guarantee of BVVI')
+    plt.title(f'Fully Observable Environment')
     plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
     plt.ylabel(f'Average Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
     plt.legend(loc='upper right')
@@ -434,31 +442,32 @@ def BVVI_plot(window_width_MDP:int,
     POMDP_PAC_raw=optimal_value_POMDP-np.cumsum(POMDP_single_episode_rewards)/(1+np.arange(len(POMDP_single_episode_rewards)))
     indices=np.arange(POMDP_PAC_raw.shape[0])
     # plt.plot(indices, POMDP_PAC_smooth,label='Partially Observable')
-    plt.semilogx(indices, POMDP_PAC_raw,linestyle='dotted', label='Partially Observable(Raw Data)')
+    plt.semilogx(indices, POMDP_PAC_raw,linestyle='dotted',
+                 label='Raw Data')
     # POMDP PAC fitting
     def inverse_sqrt(x,a,b,c,d):
         return a*(1/np.sqrt(b*x+c))+d
     indices=np.arange(POMDP_PAC_raw.shape[0])
     fit_param, fit_curve = curve_fit(inverse_sqrt, indices, POMDP_PAC_raw)
     POMDP_PAC_fit=inverse_sqrt(indices, *fit_param)
-    plt.semilogx(indices, POMDP_PAC_fit,c='royalblue', linestyle='solid', label='Partially Observable(Fitted)')
+    plt.semilogx(indices, POMDP_PAC_fit,c='royalblue', linestyle='solid',
+                 label=r'Fitted with $\tilde{O}\left(\frac{1}{\sqrt{K}}\right)$')
     # plot POMDP PAC
     plt.xlim(1,1000)
     plt.ylim((min(min(POMDP_PAC_raw),min(POMDP_PAC_raw))*0.4,(max(max(POMDP_PAC_raw),max(POMDP_PAC_raw)))*0.6))
-    plt.title(f'PAC Guarantee of BVVI')
+    plt.title(f'Partially Observable Environment')
     plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
     plt.ylabel(f'Average Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
     plt.legend(loc='upper right')
-    
+    plt.suptitle('PAC Guarantee of BVVI')
     plt.savefig('plots/FinalPAC'+current_time_str()+'.jpg')
     plt.show()
     # raise ValueError(f"hellow")
 
 if __name__ == "__main__":
-    
     train_from_scratch=False #True
     plot_all=True
-    K_end=1000 #2000
+    K_end=2000  #1000 #
     if train_from_scratch:
         naive_train_and_plot(Alg='BVVI',
                              K_end=K_end,
