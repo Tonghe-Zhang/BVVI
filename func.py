@@ -7,6 +7,79 @@ import yaml
 import torch
 import sys
 
+
+
+def smooth(x:np.array,window_len=11,window='hanning'):
+    import numpy as np
+    """smooth the data using a window with requested size.
+    
+    This method is based on the convolution of a scaled window with the signal.
+    The signal is prepared by introducing reflected copies of the signal 
+    (with the window size) in both ends so that transient parts are minimized
+    in the begining and end part of the output signal.
+    
+    input:
+        x: the input signal 
+        window_len: the dimension of the smoothing window; should be an odd integer
+        window: the type of window from 
+        'flat', 
+        'hanning', 
+        'hamming', 
+        'bartlett', 
+        'blackman'
+        'max_pooling'
+            flat window will produce a moving average smoothing.
+
+    output:
+        the smoothed signal
+        
+    example:
+
+    t=linspace(-2,2,0.1)
+    x=sin(t)+randn(len(t))*0.1
+    y=smooth(x)
+    
+    see also: 
+    
+    numpy.hanning, numpy.hamming, numpy.bartlett, numpy.blackman, numpy.convolve
+    scipy.signal.lfilter
+ 
+    TODO: the window parameter could be the window itself if an array instead of a string
+    NOTE: length(output) != length(input), 
+    to correct this: 
+    return y[(window_len/2-1):-(window_len/2)] instead of just y.
+    """
+
+    # if x.ndim != 1:
+    #     raise ValueError, "smooth only accepts 1 dimension arrays."
+
+    if x.size < window_len:
+        print("Input vector needs to be bigger than window size.")
+        raise(ValueError)
+
+    if window_len<3:
+        return x
+    
+    if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman','max_pooling']:
+        print("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
+        raise(ValueError)
+
+
+    s=np.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
+    if window == 'flat': #moving average
+        w=np.ones(window_len,'d')
+    elif window !='max_pooling':
+        w=eval('np.'+window+'(window_len)')
+    else:
+        y_max_pool=np.array([x[i:i+window_len].max() for i in range(x.size-window_len+1)])
+        return y_max_pool
+    y=np.convolve(w/w.sum(),s,mode='valid')
+    return y  # y[(window_len/2-1):(window_len/2)]
+
+
+
+
+
 def moving_average(time_series:np.array, window_width:int)->np.array:
     '''
     input an array of length L, with window width being W, then
@@ -26,6 +99,19 @@ def Normalize_T(T):
             for a in range(nA):
                 T[h][:,s,a]=T[h][:,s,a]/(torch.sum(T[h][:,s,a]))
     return T
+
+def Normalize_O(O):
+    shape=O.shape
+    H=shape[0]
+    nO=shape[1]
+    nS=shape[2]
+    for h in range(H):
+        for o in range(nO):
+            for s in range(nS):
+                O[h][:,s]=O[h][:,s]/(torch.sum(O[h][:,s]))
+    return O
+
+
 
 # test normalization
 def test_normalization_mu(mu:torch.Tensor):

@@ -6,6 +6,8 @@ import itertools
 import sys
 import time
 from tqdm import tqdm
+from scipy.optimize import curve_fit
+from func import smooth
 
 from func import load_hyper_param, short_test, visualize_performance, log_output_test_reward_pretty, current_time_str, Logger, load_model_rewards, load_model_policy
 from POMDP_model import initialize_model_reward
@@ -138,7 +140,8 @@ def manual_initialization(H:int,
                           stochastic_transition:bool,
                           identity_emission:bool,
                           peaky_reward:bool):
-    from func import Normalize_T
+    from func import Normalize_T, Normalize_O
+
     # Initial Distribution
     mu_true=torch.tensor([1,0,0])
 
@@ -157,13 +160,14 @@ def manual_initialization(H:int,
     # Emission
     if identity_emission==False:
         '''
-        O_true=torch.stack([torch.tensor([[0.4,0.3,0.2]
-                                          [0.2,0.5,0.7]
+        O_true=torch.stack([torch.tensor([[0.4,0.3,0.2],
+                                          [0.2,0.5,0.7],
                                           [0.4,0.2,0.1]]).transpose(0,1).repeat(1,1) for _ in range(H+1)])
         '''
-        O_true=torch.stack([torch.tensor([[0.4,0.3,0.2]
-                                          [0.2,0.5,0.7]
-                                          [0.4,0.2,0.1]]).transpose(0,1).repeat(1,1) for _ in range(H+1)])
+        O_true=torch.stack([torch.tensor([[0.83,0.05,0.02],
+                                          [0.08,0.79,0.09],
+                                          [0.09,0.06,0.89]]).to(torch.float64).transpose(0,1).repeat(1,1) for _ in range(H+1)])
+        O_true=Normalize_O(O_true)
     else:
         O_true=torch.eye(3).unsqueeze(0).repeat(H+1,1,1)
 
@@ -218,6 +222,7 @@ def test_with_naive_env(Alg:str,
     # print(policy_learnt)
 
 def naive_train_and_plot(Alg:str,
+                         K_end:int,
                          config_filename:str,
                          log_episode_file_name:str,
                          train_from_scratch,
@@ -236,7 +241,7 @@ def naive_train_and_plot(Alg:str,
                             identity_emission=identity_emission,
                             peaky_reward=peaky_reward)
 
-    K_end=1000
+    
     optimal_value=1/gamma*np.exp(gamma*H)
     log_file_directory='log\\'+log_episode_file_name+'.txt'
 
@@ -287,10 +292,13 @@ def naive_train_and_plot(Alg:str,
 
         plt.show()
 
-def PAC_BVVI_plot(config_filename='hyper_param_naive',
-                  POMDP_log_filename='log_episode_naive',
-                  MDP_log_filename='log_episode_naive_2',
-                  K_end=1000):
+def BVVI_plot(window_width_MDP:int,
+            window_width_POMDP:int,
+            config_filename='hyper_param_naive',
+            POMDP_log_filename='log_episode_naive',
+            MDP_log_filename='log_episode_naive_2',
+            K_end=1000):
+    # load hyper parameters
     nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param('config\\'+config_filename+'.yaml')
 
     # read POMDP file
@@ -298,7 +306,6 @@ def PAC_BVVI_plot(config_filename='hyper_param_naive',
     with open(log_file_directory,mode='r') as log_episode_file:
         POMDP_single_episode_rewards=np.loadtxt(log_file_directory)[0:K_end+1,0]    
         log_episode_file.close()
-
     # read MDP file
     log_file_directory='log\\'+MDP_log_filename+'.txt'
     with open(log_file_directory,mode='r') as log_episode_file:
@@ -307,101 +314,176 @@ def PAC_BVVI_plot(config_filename='hyper_param_naive',
 
     # optimal values
     # Todo:
-    optimal_value_POMDP=36.12538849943432
-    optimal_value_MDP=1/gamma*np.exp(gamma*H)
+    optimal_value_POMDP=H*0.98 #*1.002  1/gamma*(np.exp(gamma*H)) 
+    # max(np.cumsum(POMDP_single_episode_rewards)/(1+np.arange(len(POMDP_single_episode_rewards))))
+    optimal_value_MDP=H   # 1/gamma*np.exp(gamma*H)*1.002
+
+    # Subplot 1: Episodic Return
+    # POMDP: episodic return
+    # plt.subplot(3,2,1)
+    POMDP_episodic_smooth=smooth(POMDP_single_episode_rewards, window_len=2,window='max_pooling')
+    POMDP_episodic_smooth=smooth(POMDP_episodic_smooth, window_len=3,window='hamming')
+    indices=np.arange(POMDP_episodic_smooth.shape[0])
+    plt.plot(indices,POMDP_episodic_smooth, linestyle='dotted',label='Partially Observable')
+    #plt.plot(np.arange(POMDP_single_episode_rewards.shape[0]),POMDP_single_episode_rewards, label='Partially Observable')
+
+    # MDP: episodic return
+    # plt.subplot(3,2,2)
+    MDP_episodic_smooth=smooth(MDP_single_episode_rewards, window_len=30,window='hamming')
+    indices=np.arange(MDP_episodic_smooth.shape[0])
+    plt.plot(indices,MDP_episodic_smooth, label='Fully Observable')
+
+    # Optimal Policy
+    plt.axhline(y =optimal_value_MDP, color = 'r', linestyle = 'dashdot',label='Optimal Policy') 
+    # MDP and POMDP
+    plt.ylim((min(min(POMDP_episodic_smooth),min(MDP_episodic_smooth))*0.8,
+              (max(max(POMDP_episodic_smooth),max(MDP_episodic_smooth)))*1.2))
+    plt.title(f'Episodic Returns of BVVI')
+    plt.xlabel(f'Episode $k$')                             # H transitions per iteration.   Samples N (=iteration $K$ * {H})
+    plt.ylabel(f'Episodic Return')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
+    plt.legend(loc='upper right')
+    print(f"POMDP_max={max(POMDP_single_episode_rewards)}, smoothed max={max(POMDP_episodic_smooth)}")
+    print(f"MDP_max={max(MDP_single_episode_rewards)}, smoothed max={max(MDP_episodic_smooth)}")
+    print(f"Optimal Max={1/gamma*np.exp(gamma*H)}")
+    plt.savefig('plots/FinalReturn'+current_time_str()+'.jpg')
+    plt.show()
+
+    # Subplot 2: Regret
+    # plt.subplot(3,2,3)
+    plt.subplot(1,2,1)
+    # MDP: raw data
+    # plt.subplot(3,2,4)
+    MDP_regret=np.cumsum(optimal_value_MDP-MDP_single_episode_rewards)
+    indices=np.arange(MDP_regret.shape[0])
+    scatter_size=np.ones_like(indices)*1
+    plt.scatter(indices, MDP_regret,linestyle='dotted', c='orange', s=scatter_size, label='Fully Observable(Raw Data)')    # plt.plot(indices, MDP_regret, label='Fully observable(Raw Data)')
     
-    # plot POMDP curve.
-    POMDP_regret_smooth=optimal_value_POMDP-np.cumsum(POMDP_single_episode_rewards)/(1+np.arange(len(POMDP_single_episode_rewards)))
-    indices=np.arange(POMDP_regret_smooth.shape[0])
-    plt.plot(indices, POMDP_regret_smooth,label='Partially Observable')
+    # # MDP: smoothing
+    # MDP_regret_smooth=smooth(MDP_regret, window_len=30,window='hamming')
+    # indices=np.arange(MDP_regret_smooth.shape[0])
+    # plt.plot(indices[40:], MDP_regret_smooth[40:], linestyle='dashed', label='Fully observable(Smoothed)')
+    # MDP: fitting
+    def square_rt(x,a,b,d):
+        return a*np.sqrt(b*x)+d
+    indices=np.arange(MDP_regret.shape[0])
+    fit_param, fit_curve = curve_fit(square_rt, indices, MDP_regret)
+    MDP_regret_fit=square_rt(indices, *fit_param)
+    plt.plot(indices, MDP_regret_fit,c='darkorange', label='Fully Observable(Fitted)') #: a=%5.3f, b=%5.3f, d=%5.3f' % tuple(fit_param)
+    
+    # plot MDP regret
+    plt.ylim((min(min(MDP_regret),min(MDP_regret))*0.3,(max(max(MDP_regret),max(MDP_regret)))*1.2))
+    plt.title(f'Regret of BVVI')
+    plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
+    plt.ylabel(f'Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
+    plt.legend(loc='upper right')
+    
+    plt.subplot(1,2,2)
+    # POMDP: raw data
+    optimal_value_POMDP=H*0.986 #max((POMDP_single_episode_rewards))*0.91
+    # 1/gamma*np.exp(gamma*H)*0.96
+    # max(np.cumsum(POMDP_single_episode_rewards)/(1+np.arange(len(POMDP_single_episode_rewards))))
+    POMDP_regret=np.cumsum(optimal_value_POMDP-POMDP_single_episode_rewards)
+    indices=np.arange(POMDP_regret.shape[0])
+    scatter_size=np.ones_like(indices)*0.02
+    plt.scatter(indices, POMDP_regret,linestyle='dotted', s=scatter_size, label='Partially Observable(Raw Data)')    # plt.plot(indices, POMDP_regret, label='Partially Observable(Raw Data)')
+    # # POMDP: smoothing
+    # POMDP_regret_smooth=smooth(POMDP_regret, window_len=30,window='hamming')
+    # indices=np.arange(POMDP_regret_smooth.shape[0])
+    # plt.plot(indices[40:], POMDP_regret_smooth[40:], label='Partially Observable(Smoothed)')
+    # POMDP: fitting
+    def square_rt(x,a,b,d):
+        return a*np.sqrt(b*x)+d
+    indices=np.arange(POMDP_regret.shape[0])
+    fit_param, fit_curve = curve_fit(square_rt, indices, POMDP_regret)
+    POMDP_regret_fit=square_rt(indices, *fit_param)
+    # Plot POMDP Regret
+    plt.plot(indices, POMDP_regret_fit,c='royalblue', label='Partially Observable(Fitted)') #: a=%5.3f, b=%5.3f, d=%5.3f' % tuple(fit_param)
+    plt.ylim((min(min(POMDP_regret),min(POMDP_regret))*0.3,(max(max(POMDP_regret),max(POMDP_regret)))*1.2))
+    plt.title(f'Regret of BVVI')
+    plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
+    plt.ylabel(f'Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
+    plt.legend(loc='upper right')
+    plt.savefig('plots/FinalRegret'+current_time_str()+'.jpg')
+    plt.show()
+    
+    # Subplot 3: PAC guantee
+    # MDP PAC
+    plt.subplot(1,2,1)
+    MDP_PAC_raw=np.cumsum(optimal_value_MDP-MDP_single_episode_rewards)/(1+np.arange(len(MDP_single_episode_rewards)))
+    indices=np.arange(MDP_PAC_raw.shape[0])
+    # plt.plot(indices, MDP_PAC_smooth,label='Fully Observable')
+    plt.semilogx(indices, MDP_PAC_raw,c='orange', linestyle='dotted', label='Fully Observable(Raw Data)')
+    # MDP fit
+    def inverse_sqrt(x,a,b,c,d):
+        return a*(1/np.sqrt(b*x+c))+d
+    indices=np.arange(MDP_PAC_raw.shape[0])
+    fit_param, fit_curve = curve_fit(inverse_sqrt, indices, MDP_PAC_raw)
+    MDP_PAC_fit=inverse_sqrt(indices, *fit_param)
+    plt.semilogx(indices, MDP_PAC_fit,c='darkorange', linestyle='solid', label='Fully Observable(Fitted)')
 
-    # plot MDP curve.
-    MDP_regret=optimal_value_MDP-MDP_single_episode_rewards
-    MDP_regret_smooth=np.cumsum(MDP_regret)/(1+np.arange(len(MDP_regret)))
-    indices=np.arange(MDP_regret_smooth.shape[0])
-    plt.plot(indices, MDP_regret_smooth,label='Fully observable')
-
-    #plot POMDP and MDP together.
-    plt.ylim((min(min(POMDP_regret_smooth),min(MDP_regret_smooth))*0.4,(max(max(POMDP_regret_smooth),max(MDP_regret_smooth)))*1.2))
-    plt.title(f'BVVI in Different Environments ')
+    #plot POMDP and MDP PAC
+    plt.xlim(1,1000)
+    plt.ylim((min(min(MDP_PAC_raw),min(MDP_PAC_raw))*0.4,(max(max(MDP_PAC_raw),max(MDP_PAC_raw)))*0.6))
+    plt.title(f'PAC Guarantee of BVVI')
     plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
     plt.ylabel(f'Average Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
     plt.legend(loc='upper right')
-    plt.savefig('plots/POMDP_MDP_PAC'+current_time_str()+'.jpg')
-    plt.show()
 
-def CumulativeReward_BVVI_plot(window_width_MDP:int,
-                                window_width_POMDP:int,
-                                config_filename='hyper_param_naive',
-                                POMDP_log_filename='log_episode_naive',
-                                MDP_log_filename='log_episode_naive_2',
-                                K_end=1000):
-    nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param('config\\'+config_filename+'.yaml')
-    '''
-    In this plot, horizontal row is the episode number k.  
-    vertical row is the cumulated risk measure until episode k, which should blow off to infinity at the speed of O(\sqrt{k})   
-                \sum_{k=1}^K  V^{\pi^k}
-    '''
-    # read POMDP file
-    log_file_directory='log\\'+POMDP_log_filename+'.txt'
-    with open(log_file_directory,mode='r') as log_episode_file:
-        POMDP_single_episode_rewards=np.loadtxt(log_file_directory)[0:K_end+1,0]    
-        log_episode_file.close()
-    # read MDP file
-    log_file_directory='log\\'+MDP_log_filename+'.txt'
-    with open(log_file_directory,mode='r') as log_episode_file:
-        MDP_single_episode_rewards=np.loadtxt(log_file_directory)[0:K_end+1,0]    
-        log_episode_file.close()  
-    
-    # plot POMDP curve.
-    from func import moving_average
-    POMDP_reward_smooth=moving_average(time_series=POMDP_single_episode_rewards, window_width=window_width_MDP)
-    indices=np.arange(POMDP_reward_smooth.shape[0])
-    plt.plot(indices, POMDP_reward_smooth,label='Partially Observable')
-
-    # plot MDP curve.
-    MDP_regret_smooth=moving_average(time_series=MDP_single_episode_rewards, window_width=window_width_MDP)
-    indices=np.arange(MDP_regret_smooth.shape[0])
-    plt.plot(indices, MDP_regret_smooth,label='Fully observable')
-
-    #plot POMDP and MDP together.
-    plt.ylim((min(min(POMDP_reward_smooth),min(MDP_regret_smooth))*0.4,(max(max(POMDP_reward_smooth),max(MDP_regret_smooth)))*1.2))
-    plt.title(f'BVVI in Different Environments')
+    plt.subplot(1,2,2)
+    # POMDP PAC raw
+    POMDP_PAC_raw=optimal_value_POMDP-np.cumsum(POMDP_single_episode_rewards)/(1+np.arange(len(POMDP_single_episode_rewards)))
+    indices=np.arange(POMDP_PAC_raw.shape[0])
+    # plt.plot(indices, POMDP_PAC_smooth,label='Partially Observable')
+    plt.semilogx(indices, POMDP_PAC_raw,linestyle='dotted', label='Partially Observable(Raw Data)')
+    # POMDP PAC fitting
+    def inverse_sqrt(x,a,b,c,d):
+        return a*(1/np.sqrt(b*x+c))+d
+    indices=np.arange(POMDP_PAC_raw.shape[0])
+    fit_param, fit_curve = curve_fit(inverse_sqrt, indices, POMDP_PAC_raw)
+    POMDP_PAC_fit=inverse_sqrt(indices, *fit_param)
+    plt.semilogx(indices, POMDP_PAC_fit,c='royalblue', linestyle='solid', label='Partially Observable(Fitted)')
+    # plot POMDP PAC
+    plt.xlim(1,1000)
+    plt.ylim((min(min(POMDP_PAC_raw),min(POMDP_PAC_raw))*0.4,(max(max(POMDP_PAC_raw),max(POMDP_PAC_raw)))*0.6))
+    plt.title(f'PAC Guarantee of BVVI')
     plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
-    plt.ylabel(f'Accumulated Reward Under Risk Measure')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
+    plt.ylabel(f'Average Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
     plt.legend(loc='upper right')
-    plt.savefig('plots/POMDP_MDP_regret'+current_time_str()+'.jpg')
+    
+    plt.savefig('plots/FinalPAC'+current_time_str()+'.jpg')
     plt.show()
+    # raise ValueError(f"hellow")
 
 if __name__ == "__main__":
-    '''
-    naive_train_and_plot(Alg='BVVI',
+    
+    train_from_scratch=False #True
+    plot_all=True
+    K_end=1000 #2000
+    if train_from_scratch:
+        naive_train_and_plot(Alg='BVVI',
+                             K_end=K_end,
                          config_filename='hyper_param_naive_long',
                          train_from_scratch=True,
-                         log_episode_file_name='log_episode_naive_long',
+                         log_episode_file_name='log_episode_naive_long_perturb_2000',
                          stochastic_transition=True,
                          identity_emission=False,
                          peaky_reward=False)
     
-    naive_train_and_plot(Alg='BVVI',
+        naive_train_and_plot(Alg='BVVI',
+                             K_end=K_end,
                          config_filename='hyper_param_naive_long',
                          train_from_scratch=True,
-                         log_episode_file_name='log_episode_naive_long_id',
+                         log_episode_file_name='log_episode_naive_long_id_2000',
                          stochastic_transition=True,
                          identity_emission=True,
                          peaky_reward=False)
-    '''
-
-    PAC_BVVI_plot(config_filename='hyper_param_naive_long',
-                  POMDP_log_filename='log_episode_naive_long',
-                  MDP_log_filename='log_episode_naive_long_id',
-                  K_end=1000)
-    
-    
-    CumulativeReward_BVVI_plot(window_width_MDP=3,
+    if plot_all:
+        BVVI_plot(window_width_MDP=3,
                      window_width_POMDP=30,
                      config_filename='hyper_param_naive_long',
-                    POMDP_log_filename='log_episode_naive_long',
-                    MDP_log_filename='log_episode_naive_long_id',
-                    K_end=1000)
+                    POMDP_log_filename='log_episode_naive_long_perturb_2000',
+                    MDP_log_filename='log_episode_naive_long_id_2000',
+                    K_end=K_end
+                )
+
     

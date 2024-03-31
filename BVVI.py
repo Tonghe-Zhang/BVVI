@@ -266,7 +266,8 @@ def BVVI(hyper_param:tuple,
         tested_return = \frac{1}{\gamm} \mathbb{E}^{\widehat{\pi}^k} e^{\gamma \sum_{h=1}^H r_h(s_h,a_h)} 
         '''
         num_samples=7
-        tested_risk_measure[k]=(1/gamma)*np.array([np.exp(gamma*sum(sample_trajectory(H,policy_learnt,model_true,reward_true,output_reward=True))) for _ in range(num_samples)]).mean()
+        # Fixed a small mistake: forgot to use np.log()
+        tested_risk_measure[k]=(1/gamma)*np.log(np.array([np.exp(gamma*sum(sample_trajectory(H,policy_learnt,model_true,reward_true,output_reward=True))) for _ in range(num_samples)]).mean())
         # [Evaluation] compute the average Frobenius error between the true and learnt parameters until this iter.
         mu_err[k]=torch.linalg.norm(mu_true-mu_hat)/mu_true.numel()
         T_err[k]=torch.linalg.norm(T_true-T_hat)/T_true.numel()
