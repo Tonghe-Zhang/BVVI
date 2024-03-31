@@ -390,7 +390,7 @@ def BVVI_plot(window_width_MDP:int,
     indices=np.arange(POMDP_regret.shape[0])
     scatter_size=np.ones_like(indices)*0.02
     plt.scatter(indices, POMDP_regret,linestyle='dotted', s=scatter_size,
-                label='Raw Dat)')    # plt.plot(indices, POMDP_regret, label='Partially Observable(Raw Data)')
+                label='Raw Data')    # plt.plot(indices, POMDP_regret, label='Partially Observable(Raw Data)')
     # # POMDP: smoothing
     # POMDP_regret_smooth=smooth(POMDP_regret, window_len=30,window='hamming')
     # indices=np.arange(POMDP_regret_smooth.shape[0])
@@ -402,9 +402,11 @@ def BVVI_plot(window_width_MDP:int,
     fit_param, fit_curve = curve_fit(square_rt, indices, POMDP_regret)
     POMDP_regret_fit=square_rt(indices, *fit_param)
     # Plot POMDP Regret
-    plt.plot(indices, POMDP_regret_fit,c='royalblue', label='Partially Observable(Fitted)') #: a=%5.3f, b=%5.3f, d=%5.3f' % tuple(fit_param)
+    plt.plot(indices, POMDP_regret_fit,c='royalblue',
+             label=r'Fitted with ${O}\left(\sqrt{K}\right)$') #: a=%5.3f, b=%5.3f, d=%5.3f' % tuple(fit_param)
     plt.ylim((min(min(POMDP_regret),min(POMDP_regret))*0.3,(max(max(POMDP_regret),max(POMDP_regret)))*1.2))
     plt.title(f'Partially Observable Environment')
+   
     plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
     plt.ylabel(f'Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
     plt.legend(loc='upper right')
@@ -451,7 +453,7 @@ def BVVI_plot(window_width_MDP:int,
     fit_param, fit_curve = curve_fit(inverse_sqrt, indices, POMDP_PAC_raw)
     POMDP_PAC_fit=inverse_sqrt(indices, *fit_param)
     plt.semilogx(indices, POMDP_PAC_fit,c='royalblue', linestyle='solid',
-                 label=r'Fitted with $\tilde{O}\left(\frac{1}{\sqrt{K}}\right)$')
+                 label=r'Fitted with ${O}\left(\frac{1}{\sqrt{K}}\right)$')
     # plot POMDP PAC
     plt.xlim(1,1000)
     plt.ylim((min(min(POMDP_PAC_raw),min(POMDP_PAC_raw))*0.4,(max(max(POMDP_PAC_raw),max(POMDP_PAC_raw)))*0.6))
@@ -467,7 +469,7 @@ def BVVI_plot(window_width_MDP:int,
 if __name__ == "__main__":
     train_from_scratch=False #True
     plot_all=True
-    K_end=2000  #1000 #
+    K_end=1000 #2000  #
     if train_from_scratch:
         naive_train_and_plot(Alg='BVVI',
                              K_end=K_end,

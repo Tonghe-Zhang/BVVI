@@ -48,9 +48,9 @@ On page 5 of the original paper we proved that the regret of BVVI scales at the 
 $$
 \operatorname{Regret}({\color{red}{K}} ; \mathcal{P}, \gamma)=\mathcal{O}\bigg(\underbrace{\frac{e^{|\gamma| H}-1}{|\gamma| H}}_{\text {risk awareness }} \underbrace{H^2 {\color{red}\sqrt{{K}}}\sqrt{ S^2 A O}}_{\text {Statistical error }} \underbrace{\sqrt{H \ln \frac{K H S O A}{\delta}}}_{\text {History-dependency }}\bigg)
 $$
-The experiment result coincides with our finding.
+The experiment result coincides with our finding. 
 
-![Regret_Compare](./plots.assets/Regret_Compare-1711897246919-8.jpeg)
+![image-20240331235812554](./report.assets/image-20240331235812554.png)
 
 **Comments:**
 
@@ -85,9 +85,9 @@ e^{\gamma \sum_{h=1}^H ~r_h(S_h,A_h)}\right]
 $$
 Our experiment also validates the finding that the sample complexity and the optimality follows the inverse square law, or equivalently, the optimality of output policies $\epsilon$ improves at the speed of $\tilde{O}\left(\frac{1}{\sqrt{K}}\right)$: 
 
+![PAC_Guarantee](./report.assets/PAC_Guarantee-1711900763400-4.jpeg)
 
 
-<img src="./plots.assets/PAC_Guarantee-1711896668935-6.jpeg" alt="PAC_Guarantee" style="zoom:77%;" />
 
 **Comments:**
 
