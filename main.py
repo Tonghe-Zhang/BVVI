@@ -185,7 +185,7 @@ def test_with_naive_env(Alg:str,
                         log_episode_filename,
                         stochastic_transition,
                         identity_emission,
-                        peaky_reward=True):
+                        peaky_reward:bool):
     
     nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param('config\\'+config_filename+'.yaml')    # can delete the naive
 
@@ -228,7 +228,7 @@ def naive_train_and_plot(Alg:str,
                          train_from_scratch,
                          stochastic_transition,
                           identity_emission,
-                          peaky_reward, 
+                          peaky_reward:bool, 
                           instant_plot=False):
     
     nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param('config'+config_filename+'.yaml')
@@ -467,7 +467,6 @@ def BVVI_plot(window_width_MDP:int,
     plt.show()
     # raise ValueError(f"hellow")
 
-
 def train_plot_single(train_from_scratch:bool, plot_all:bool, K_end:int)->None:
     if train_from_scratch:
         naive_train_and_plot(Alg='BVVI',
@@ -571,22 +570,19 @@ def multi_risk_level_plot(window_width_POMDP:int,
 
         # PAC
         indices, PAC, PAC_fit=POMDP_PAC(optimal_value_POMDP,smoothed)
-        
-        plt.semilogx(*POMDP_smooth(PAC),c=label_color[i],linestyle="dotted")
+        ax = plt.gca()
+        smooth_PAC_id, smooth_PAC=POMDP_smooth(PAC)
+        plt.scatter(smooth_PAC_id, smooth_PAC,c=label_color[i],alpha=0.3, s=np.ones_like(smooth_PAC_id))
+        plt.xscale('log')
+
         plt.semilogx(indices, PAC_fit,linestyle='solid',c=label_color[i], label=label_text[i*2])
     plt.xlim(10,1000)
-    plt.title('BVVI under Different Risk Levels')
+    plt.title('PAC Guarantee of BVVI')
     plt.xlabel('Episode Number k')
     plt.ylabel('Average Regret')
     plt.legend(loc='upper right')
-    plt.savefig('plots/Various_Risk_PAC'+current_time_str()+'.jpg')
+    # plt.savefig('plots/Various_Risk_PAC'+current_time_str()+'.jpg')
     plt.show()
-
-
-
-
-
-
 
 def train_multiple_risk(train_from_scratch, plot_all, K_end):
     gamma_range=[ -5.0,-3.0, -1.0, 0.03, 1.0, 3.0, 5.0]
@@ -608,11 +604,12 @@ def train_multiple_risk(train_from_scratch, plot_all, K_end):
                                 POMDP_log_files=log_files,
                                 K_end=K_end)
 
+
 if __name__ == "__main__":
     train_from_scratch=False #True 
     plot_all=True
     K_end=1000                  #2000
-    
+
     # train_plot_single(train_from_scratch, plot_all, K_end)
 
     train_multiple_risk(train_from_scratch, plot_all, K_end)
