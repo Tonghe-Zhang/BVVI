@@ -502,37 +502,96 @@ def multi_risk_level_plot(window_width_POMDP:int,
                           K_end:int):
     # read risk_params
     num_params=len(config_files)
+    print(f"num_params={num_params}")
     risk_params=np.zeros([num_params])
-    with open('config\\'+config_files[0]+'.yaml', 'r') as file:
-        nS,nO,nA,H,K,nF,delta,risk_params[i],iota =load_hyper_param('config\\'+config_files[0]+'.yaml')
+    for i in range(num_params):
+        with open('config\\'+config_files[0]+'.yaml', 'r') as file:
+            nS,nO,nA,H,K,nF,delta,risk_params[i],iota =load_hyper_param('config\\'+config_files[i]+'.yaml')
         file.close()
+    print(f"Risk Params={risk_params}")
 
     # read episodic rewards
     episodic_rewards=np.zeros([K, num_params])
+    print(f"shape of container=={episodic_rewards.shape}")
     for i in range(num_params):
-        log_file_directory='log\\Various_Risk\\'+POMDP_log_files[i]+'.txt'
+        log_file_directory='log'+POMDP_log_files[i]+'.txt'
+        print(f"will read file from {log_file_directory}")
         with open(log_file_directory, 'r') as file:
-            episodic_rewards[:,i]=np.loadtxt(log_file_directory)
+            a=np.loadtxt(log_file_directory)[:,0]
+            print(f"{a.shape}")
+            episodic_rewards[:,i]=np.loadtxt(log_file_directory)[:,0]
+            print(f"{episodic_rewards.shape}")
             file.close()
     
     # save various output of risk level into a single file
     np.savetxt('log\\Various_Risk\\Risk_Level_All.txt', episodic_rewards)
 
-    # plot'em all
-    indices=np.arange(len(K))
-    for i in range(num_params):
-        plt.plot(indices, episodic_rewards[:,i], lable=f'gamma={risk_params[i]}')
+    # signal processing of the episodic rewards.
+
+    # smooth the raw data.
+    from func import POMDP_smooth, POMDP_PAC, POMDP_regret
+    
+    optimal_values=[None,H*0.96, H*0.97,  H*0.975, H*0.98, H, H]
+    '''
+    i=0
+    i=1:     H*0.96
+    i=2:     H*0.97
+    i=3:     H*0.975
+    i=4:     H*0.98
+    i=5:     H
+    i=6:     H
+    '''
+
+    '''
+    # plot Regrets
+    indices, regret,regret_fit, scatter_size=POMDP_regret(optimal_value_POMDP,smoothed)
+    plt.scatter(indices, regret,linestyle='dotted', s=scatter_size,
+        label='Raw Data')
+    plt.plot(indices,regret_fit)
+    plt.show()
+    '''
+    
+    # plot PACs
+    label_text=['' for _ in range(num_params*2)]
+    label_color=['red', 'darkorange', 'gold', 'skyblue', 'green', 'blue', 'purple']
+    for i in range(1,num_params,1):
+        '''
+        print(f"Max episodic reward of {i}=={max(episodic_rewards[:,i])}")
+        print(f"{max(np.cumsum(episodic_rewards[:,i])/(1+np.arange(len(episodic_rewards[:,i]))))}")
+        '''
+        label_text[i*2]=f'gamma={risk_params[i]}'
+
+        optimal_value_POMDP=optimal_values[i]
+
+        # smoothed curves
+        raw=episodic_rewards[:,i]
+        smoothed_id, smoothed=POMDP_smooth(raw)
+        # plt.plot(indicies,smoothed)
+        # plt.show()
+
+        # PAC
+        indices, PAC, PAC_fit=POMDP_PAC(optimal_value_POMDP,smoothed)
+        
+        plt.semilogx(*POMDP_smooth(PAC),c=label_color[i],linestyle="dotted")
+        plt.semilogx(indices, PAC_fit,linestyle='solid',c=label_color[i], label=label_text[i*2])
+    plt.xlim(10,1000)
     plt.title('BVVI under Different Risk Levels')
     plt.xlabel('Episode Number k')
-    plt.ylabel('Episodic Return')
-    plt.savefig('plots/Various_Risk'+current_time_str()+'.jpg')
+    plt.ylabel('Average Regret')
+    plt.legend(loc='upper right')
+    plt.savefig('plots/Various_Risk_PAC'+current_time_str()+'.jpg')
     plt.show()
 
+
+
+
+
+
+
 def train_multiple_risk(train_from_scratch, plot_all, K_end):
-    gamma_range=[3.0,5.0]  # -5.0,-3.0, -1.0, 0.03,  (1.0) already done yesterday. 
+    gamma_range=[ -5.0,-3.0, -1.0, 0.03, 1.0, 3.0, 5.0]
     config_files=[f'\\Various_Risk\\gamma={gamma}' for gamma in gamma_range]
     log_files=[f'\\Various_Risk\\gamma={gamma}' for gamma in gamma_range]
-    
     if train_from_scratch:
         for i in range(len(gamma_range)):
             naive_train_and_plot(Alg='BVVI',
@@ -550,10 +609,10 @@ def train_multiple_risk(train_from_scratch, plot_all, K_end):
                                 K_end=K_end)
 
 if __name__ == "__main__":
-    train_from_scratch=True   #False
+    train_from_scratch=False #True 
     plot_all=True
-    K_end=1000                #2000
-
+    K_end=1000                  #2000
+    
     # train_plot_single(train_from_scratch, plot_all, K_end)
 
     train_multiple_risk(train_from_scratch, plot_all, K_end)

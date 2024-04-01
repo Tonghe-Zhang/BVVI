@@ -7,6 +7,45 @@ import yaml
 import torch
 import sys
 
+def POMDP_smooth(POMDP_single_episode_rewards:np.array)->tuple:
+    POMDP_episodic_smooth=smooth(POMDP_single_episode_rewards, window_len=2,window='max_pooling')
+    POMDP_episodic_smooth=smooth(POMDP_episodic_smooth, window_len=3,window='hamming')
+    indices=np.arange(POMDP_episodic_smooth.shape[0])
+    return (indices, POMDP_episodic_smooth)
+
+
+def POMDP_regret(optimal_value_POMDP, POMDP_single_episode_rewards):
+    from scipy.optimize import curve_fit
+    POMDP_regret=np.cumsum(optimal_value_POMDP-POMDP_single_episode_rewards)
+    indices=np.arange(POMDP_regret.shape[0])
+    scatter_size=np.ones_like(indices)*0.02
+    def square_rt(x,a,b,d):
+        return a*np.sqrt(b*x)+d
+    print(POMDP_regret.shape[0])
+    indices=np.arange(POMDP_regret.shape[0])
+    fit_param, fit_curve = curve_fit(square_rt, indices, POMDP_regret)
+    POMDP_regret_fit=square_rt(indices, *fit_param)
+
+    return (indices, POMDP_regret, POMDP_regret_fit, scatter_size)
+
+def POMDP_PAC(optimal_value_POMDP,POMDP_single_episode_rewards:np.array):
+    from scipy.optimize import curve_fit
+
+    POMDP_PAC_raw=optimal_value_POMDP-np.cumsum(POMDP_single_episode_rewards)/(1+np.arange(len(POMDP_single_episode_rewards)))
+    indices=np.arange(POMDP_PAC_raw.shape[0])
+
+    def inverse_sqrt(x,a,b,c,d):
+        return a*(1/np.sqrt(b*x+c))+d
+    indices=np.arange(POMDP_PAC_raw.shape[0])
+    fit_param, fit_curve = curve_fit(inverse_sqrt, indices, POMDP_PAC_raw)
+    POMDP_PAC_fit=inverse_sqrt(indices, *fit_param)
+
+    return (indices[10:],POMDP_PAC_raw[10:],POMDP_PAC_fit[10:])
+
+
+
+
+
 
 
 def smooth(x:np.array,window_len=11,window='hanning'):
