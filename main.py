@@ -228,9 +228,10 @@ def naive_train_and_plot(Alg:str,
                          train_from_scratch,
                          stochastic_transition,
                           identity_emission,
-                          peaky_reward):
+                          peaky_reward, 
+                          instant_plot=False):
     
-    nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param('config\\'+config_filename+'.yaml')
+    nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param('config'+config_filename+'.yaml')
 
     # train again on the naive dataset.
     if train_from_scratch:
@@ -241,56 +242,56 @@ def naive_train_and_plot(Alg:str,
                             identity_emission=identity_emission,
                             peaky_reward=peaky_reward)
 
-    
-    optimal_value=1/gamma*np.log(np.exp(gamma*H))
-    log_file_directory='log\\'+log_episode_file_name+'.txt'
+    if instant_plot:
+        optimal_value=1/gamma*np.log(np.exp(gamma*H))
+        log_file_directory='log\\'+log_episode_file_name+'.txt'
 
-    with open(log_file_directory,mode='r') as log_episode_file:
-        averge_risk_measure_of_each_episode=np.loadtxt(log_file_directory)[0:K_end+1,0]
-        '''
-        Plot regret, suppose that we know the optimal value funciton.
-        '''
+        with open(log_file_directory,mode='r') as log_episode_file:
+            averge_risk_measure_of_each_episode=np.loadtxt(log_file_directory)[0:K_end+1,0]
+            '''
+            Plot regret, suppose that we know the optimal value funciton.
+            '''
 
-        plot_type='regret'   # other options: 'risk_average', 'risk_each'
+            plot_type='regret'   # other options: 'risk_average', 'risk_each'
 
-        risk_measure_smooth=np.cumsum(averge_risk_measure_of_each_episode)/(1+np.arange(len(averge_risk_measure_of_each_episode)))
+            risk_measure_smooth=np.cumsum(averge_risk_measure_of_each_episode)/(1+np.arange(len(averge_risk_measure_of_each_episode)))
 
-        regret_curve=optimal_value-averge_risk_measure_of_each_episode
+            regret_curve=optimal_value-averge_risk_measure_of_each_episode
 
-        regret_curve_smooth=np.cumsum(regret_curve)/(1+np.arange(len(regret_curve)))
+            regret_curve_smooth=np.cumsum(regret_curve)/(1+np.arange(len(regret_curve)))
+            
+            indices=np.arange(regret_curve_smooth.shape[0])
+
+            if plot_type=='regret':
+                plot_curve=regret_curve_smooth
+            elif plot_type=='risk_average':
+                plot_curve=risk_measure_smooth
+            elif plot_type=='risk_each':
+                plot_curve=averge_risk_measure_of_each_episode
+            plt.plot(indices, plot_curve,label='BVVI(ours)')
+            
+            # upper and lower bounds of the accumulated risk measure.
+
+            plt.ylim((min(plot_curve)*0.4,max(plot_curve)*1.2))
+
+            plt.title(f'Performance of Output Policies')   # . Horizon H={H}
+            
+            plt.xlabel(f'Episode $k$')    # H transitions per iteration.   Samples N (=iteration $K$ * {H})
+            
+            if plot_type=='regret':
+                plt.ylabel(f'Average Regret')
+            elif plot_type=='risk_average':
+                plt.ylabel(f'Average Risk Measure')
+            elif plot_type=='risk_each':
+                plt.ylabel(f'Risk Measure of Each Episode')
         
-        indices=np.arange(regret_curve_smooth.shape[0])
+            # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
 
-        if plot_type=='regret':
-            plot_curve=regret_curve_smooth
-        elif plot_type=='risk_average':
-            plot_curve=risk_measure_smooth
-        elif plot_type=='risk_each':
-            plot_curve=averge_risk_measure_of_each_episode
-        plt.plot(indices, plot_curve,label='BVVI(ours)')
-        
-        # upper and lower bounds of the accumulated risk measure.
+            plt.legend(loc='upper right')
 
-        plt.ylim((min(plot_curve)*0.4,max(plot_curve)*1.2))
+            plt.savefig('plots/Reward'+current_time_str()+'.jpg')
 
-        plt.title(f'Performance of Output Policies')   # . Horizon H={H}
-        
-        plt.xlabel(f'Episode $k$')    # H transitions per iteration.   Samples N (=iteration $K$ * {H})
-        
-        if plot_type=='regret':
-            plt.ylabel(f'Average Regret')
-        elif plot_type=='risk_average':
-            plt.ylabel(f'Average Risk Measure')
-        elif plot_type=='risk_each':
-            plt.ylabel(f'Risk Measure of Each Episode')
-       
-        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
-
-        plt.legend(loc='upper right')
-
-        plt.savefig('plots/Reward'+current_time_str()+'.jpg')
-
-        plt.show()
+            plt.show()
 
 def BVVI_plot(window_width_MDP:int,
             window_width_POMDP:int,
@@ -466,10 +467,8 @@ def BVVI_plot(window_width_MDP:int,
     plt.show()
     # raise ValueError(f"hellow")
 
-if __name__ == "__main__":
-    train_from_scratch=False #True
-    plot_all=True
-    K_end=1000 #2000  #
+
+def train_plot_single(train_from_scratch:bool, plot_all:bool, K_end:int)->None:
     if train_from_scratch:
         naive_train_and_plot(Alg='BVVI',
                              K_end=K_end,
@@ -496,5 +495,65 @@ if __name__ == "__main__":
                     MDP_log_filename='log_episode_naive_long_id_2000',
                     K_end=K_end
                 )
+        
+def multi_risk_level_plot(window_width_POMDP:int,
+                          config_files:list,
+                          POMDP_log_files:list,
+                          K_end:int):
+    # read risk_params
+    num_params=len(config_files)
+    risk_params=np.zeros([num_params])
+    with open('config\\'+config_files[0]+'.yaml', 'r') as file:
+        nS,nO,nA,H,K,nF,delta,risk_params[i],iota =load_hyper_param('config\\'+config_files[0]+'.yaml')
+        file.close()
 
+    # read episodic rewards
+    episodic_rewards=np.zeros([K, num_params])
+    for i in range(num_params):
+        log_file_directory='log\\Various_Risk\\'+POMDP_log_files[i]+'.txt'
+        with open(log_file_directory, 'r') as file:
+            episodic_rewards[:,i]=np.loadtxt(log_file_directory)
+            file.close()
     
+    # save various output of risk level into a single file
+    np.savetxt('log\\Various_Risk\\Risk_Level_All.txt', episodic_rewards)
+
+    # plot'em all
+    indices=np.arange(len(K))
+    for i in range(num_params):
+        plt.plot(indices, episodic_rewards[:,i], lable=f'gamma={risk_params[i]}')
+    plt.title('BVVI under Different Risk Levels')
+    plt.xlabel('Episode Number k')
+    plt.ylabel('Episodic Return')
+    plt.savefig('plots/Various_Risk'+current_time_str()+'.jpg')
+    plt.show()
+
+def train_multiple_risk(train_from_scratch, plot_all, K_end):
+    gamma_range=[3.0,5.0]  # -5.0,-3.0, -1.0, 0.03,  (1.0) already done yesterday. 
+    config_files=[f'\\Various_Risk\\gamma={gamma}' for gamma in gamma_range]
+    log_files=[f'\\Various_Risk\\gamma={gamma}' for gamma in gamma_range]
+    
+    if train_from_scratch:
+        for i in range(len(gamma_range)):
+            naive_train_and_plot(Alg='BVVI',
+                                K_end=K_end,
+                                config_filename=config_files[i],
+                                train_from_scratch=True,
+                                log_episode_file_name=log_files[i],
+                                stochastic_transition=True,
+                                identity_emission=False,
+                                peaky_reward=False)
+    if plot_all:
+        multi_risk_level_plot(window_width_POMDP=30,
+                                config_files=config_files,
+                                POMDP_log_files=log_files,
+                                K_end=K_end)
+
+if __name__ == "__main__":
+    train_from_scratch=True   #False
+    plot_all=True
+    K_end=1000                #2000
+
+    # train_plot_single(train_from_scratch, plot_all, K_end)
+
+    train_multiple_risk(train_from_scratch, plot_all, K_end)
