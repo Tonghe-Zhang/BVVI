@@ -558,7 +558,7 @@ def multi_risk_level_plot(window_width_POMDP:int,
         print(f"Max episodic reward of {i}=={max(episodic_rewards[:,i])}")
         print(f"{max(np.cumsum(episodic_rewards[:,i])/(1+np.arange(len(episodic_rewards[:,i]))))}")
         '''
-        label_text[i*2]=f'gamma={risk_params[i]}'
+        label_text[i*2]=r'$\gamma$='+f'{risk_params[i]}'
 
         optimal_value_POMDP=optimal_values[i]
 
@@ -577,7 +577,7 @@ def multi_risk_level_plot(window_width_POMDP:int,
 
         plt.semilogx(indices, PAC_fit,linestyle='solid',c=label_color[i], label=label_text[i*2])
     plt.xlim(10,1000)
-    plt.title('PAC Guarantee of BVVI')
+    plt.title(f'PAC Guarantee of BVVI\nUnder Different Risk Sensitivity '+r' $\gamma$')
     plt.xlabel('Episode Number k')
     plt.ylabel('Average Regret')
     plt.legend(loc='upper right')
