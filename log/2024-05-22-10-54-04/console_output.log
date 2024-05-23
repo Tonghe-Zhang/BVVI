@@ -1,0 +1,15 @@
+Start BVVItest. Current time=2024-05-22-10-54-04
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Test Algorithm.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+hyper parameters:{}
+sizes:
+  size_of_action_space: 2
+  size_of_state_space: 3
+  size_of_observation_space: 3
+  horizon_len: 4
+  num_episode: 1000
+  confidence_level: 0.2
+  risk_sensitivity_factor: 1.0
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Call function beta_vector_value_iteration...

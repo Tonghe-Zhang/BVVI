@@ -146,7 +146,7 @@ tested_risk_measure=(1/gamma)*np.array([np.exp(gamma*sum(short_test(True))) for 
 
 # Only test the dynamic programming of BVVI
 
-from func import load_hyper_param
+from utils import load_hyper_param
 
 nS,nO,nA,H,K,nF,delta,gamma,iota = load_hyper_param("config\hyper_param_naive.yaml")
 

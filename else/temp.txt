@@ -1,3 +1,0 @@
-reward=torch.zeros([H,nS,nA])
-for h in range(H):
-reward[h]=torch.rand([nS,nA])

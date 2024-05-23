@@ -1,38 +1,41 @@
+import argparse
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import yaml
-import itertools
 import sys
 import time
 from tqdm import tqdm
-from scipy.optimize import curve_fit
-from func import smooth
-
-from func import load_hyper_param, short_test, visualize_performance, log_output_test_reward_pretty, current_time_str, Logger, load_model_rewards, load_model_policy
+import os
+from utils import make_all_dirs,init_manual,load_hyper_param, short_test, visualize_performance, log_output_test_reward_pretty, current_time_str, Logger, write_current_time_str
 from POMDP_model import initialize_model_reward
 from BVVI import BVVI
 from RSVI2 import RSVI2
+from plot import BVVI_plot, multi_risk_level_plot,plot_pac,plot_regret, plot_cum_reward,plot_cum_reward_various_risk
 
 def main(Alg:str,
-         config_filename='hyper_param_naive',
+         num_episodes:int,
+         config_filename:str,
+         log_episode_filename:str,
          model_true=None,
          reward_true=None,
          model_load=None,
          policy_load=None,
          output_to_log_file=False,
-         log_episode_filename='log_episode_naive',
          prt_progress=True,
          prt_policy_normalization=True,
          true_weight_output_parent_directory='real_env',
-         weight_output_parent_directory='learnt\\naive'
+         weight_output_parent_directory=os.path.join('learnt','naive')
          ):
     '''
     model_true if None, then randomly initialize one.
     '''
     # load hyper parameters
-    hyper_param= load_hyper_param('config\\'+config_filename+'.yaml')    # can delete the naive
+    hyper_param= load_hyper_param(os.path.join('config',config_filename+'.yaml'))    # can delete the naive
     nS,nO,nA,H,K,nF,delta,gamma,iota =hyper_param
+
+    # we can change the number of episodes K from the console.
+    K=num_episodes
 
     # initialize true model and/or rewards if necessary
     if model_true ==None:
@@ -58,7 +61,7 @@ def main(Alg:str,
     if output_to_log_file:
         print(f"Will output log information to both the file:{'console_output.log'} and the console.")
         old_stdout = sys.stdout
-        log_file = open("log\console_output.log","w")
+        log_file = open(os.path.join('./log',current_time_str(),"console_output.log"),"w")
         sys.stdout = Logger() #sys.stdout = log_file
         print(f"Start {Alg }test. Current time={current_time_str()}")
         time.sleep(3)
@@ -66,39 +69,38 @@ def main(Alg:str,
     print('%'*100)
     print('Test Algorithm.')
     print('%'*100)
-    print('hyper parameters:{}')
-    with open('config\\'+config_filename+'.yaml') as hyp_file:  # can remove naive.
+    print('hyper parameters==')
+    with open(os.path.join('config',config_filename+'.yaml')) as hyp_file:  # can remove naive.
         content=hyp_file.read()
     print(content)
+    print(f"[number of episodes K is changed to {K}]")
     print('%'*100)
     print('Call function beta_vector_value_iteration...')
 
-    with open('log\\'+log_episode_filename+'.txt',mode='w') as log_episode_file:
-        # log_episode_file.write(f"\n\nTest BVVI. Current time={current_time_str()}")   #real_env_kernels reward_fix
+    with open(os.path.join('./log',current_time_str(),log_episode_filename+'.txt'),mode='w') as log_episode_file:
         if Alg=='BVVI':
             (policy_learnt, model_learnt, evaluation_results)=BVVI(\
                 hyper_param=hyper_param,\
-                    model_true=model_true,\
-                        reward_true=reward_true,\
-                            model_load=model_load,\
-                                policy_load=policy_load,\
-                                    evaluation_metrics=evaluation_metrics,\
-                                        log_episode_file=log_episode_file,\
-                                            true_weight_output_parent_directory=true_weight_output_parent_directory,\
-                                                weight_output_parent_directory=weight_output_parent_directory,\
-                                                    prt_progress=prt_progress,\
-                                                        prt_policy_normalization=prt_policy_normalization)
+                    num_episodes=num_episodes,\
+                        model_true=model_true,\
+                            reward_true=reward_true,\
+                                model_load=model_load,\
+                                    policy_load=policy_load,\
+                                        evaluation_metrics=evaluation_metrics,\
+                                            log_episode_file=log_episode_file,\
+                                                true_weight_output_parent_directory=true_weight_output_parent_directory,\
+                                                    weight_output_parent_directory=weight_output_parent_directory,\
+                                                        prt_progress=prt_progress,\
+                                                            prt_policy_normalization=prt_policy_normalization)
         elif Alg=='RSVI2':
-            from RSVI2 import RSVI2
             (policy_learnt, model_learnt, evaluation_results)=RSVI2(\
                 hyper_param=hyper_param,\
                     model_true=model_true,\
                         reward_true=reward_true)
         else:
             raise(NotImplementedError)
-        # log_episode_file.write(f"\n\nEnd Testing BVVI. Current time={current_time_str()}")
         log_episode_file.close()
-    episode_data=np.loadtxt('log\\'+log_episode_filename+'.txt', dtype=np.float64)
+    episode_data=np.loadtxt(os.path.join('./log',current_time_str(),log_episode_filename+'.txt'), dtype=np.float64)
     print('beta_vector_value_iteration...returned.')
     print(f"End BVVI test. Current time={current_time_str()}")
     print('%'*100)
@@ -116,80 +118,17 @@ def main(Alg:str,
         log_file.close()
     return policy_learnt
 
-def test_with_medium_random_env(from_scratch=False):
-    if from_scratch:
-        model_true, reward_true=(None,None)
-        model_load, policy_load=(None,None)
-    else:
-        model_true, reward_true=load_model_rewards(parent_directory='real_env\medium_real')
-        model_load, policy_load=load_model_policy(parent_directory='learnt\medium')
-    policy_learnt=main(config_filename= 'hyper_param_medium',
-                        model_true=None,
-                        reward_true=None,
-                        model_load=None,
-                        policy_load=None,
-                        output_to_log_file=True,
-                        log_episode_filename= 'log_episode_medium',
-                        prt_progress=False,
-                        prt_policy_normalization=False,
-                        true_weight_output_parent_directory='real_env\medium_real',
-                        weight_output_parent_directory='learnt\medium'
-                        )
-    
-def manual_initialization(H:int,
-                          stochastic_transition:bool,
-                          identity_emission:bool,
-                          peaky_reward:bool):
-    from func import Normalize_T, Normalize_O
-
-    # Initial Distribution
-    mu_true=torch.tensor([1,0,0])
-
-    # Transition
-    if stochastic_transition==False:
-        T_true=torch.stack([torch.tensor([[0,0,1],
-                                        [1,0,0],
-                                        [0,1,0]]).unsqueeze(-1).repeat(1,1,2) for _ in range(H)])
-    else:
-        # Stochastic Transition(much harder)
-        T_true=torch.stack([torch.tensor([[0.03,0.04,0.89],
-                                        [0.95,0.02,0.10],
-                                        [0.02,0.94,0.01]]).to(torch.float64).unsqueeze(-1).repeat(1,1,2) for _ in range(H)])
-        T_true=Normalize_T(T_true)
-
-    # Emission
-    if identity_emission==False:
-        '''
-        O_true=torch.stack([torch.tensor([[0.4,0.3,0.2],
-                                          [0.2,0.5,0.7],
-                                          [0.4,0.2,0.1]]).transpose(0,1).repeat(1,1) for _ in range(H+1)])
-        '''
-        O_true=torch.stack([torch.tensor([[0.83,0.05,0.02],
-                                          [0.08,0.79,0.09],
-                                          [0.09,0.06,0.89]]).to(torch.float64).transpose(0,1).repeat(1,1) for _ in range(H+1)])
-        O_true=Normalize_O(O_true)
-    else:
-        O_true=torch.eye(3).unsqueeze(0).repeat(H+1,1,1)
-
-    # Rewards
-    # peacky rewards (much easier than 0/1)
-    if peaky_reward==True:
-        R_true=torch.tensor([[1,-10],[-10,1],[1,-10]]).unsqueeze(0).repeat(H,1,1)
-    else:
-        R_true=torch.tensor([[1,0],[0,1],[1,0]]).unsqueeze(0).repeat(H,1,1)
-
-    return (mu_true,T_true,O_true,R_true)
-
-def test_with_naive_env(Alg:str,
-                        config_filename,
-                        log_episode_filename,
+def train_naive_env(Alg:str,
+                        num_episodes:int,
+                        config_filename:str,
+                        log_episode_filename:str,
                         stochastic_transition,
                         identity_emission,
                         peaky_reward:bool):
     
-    nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param('config\\'+config_filename+'.yaml')    # can delete the naive
+    nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param(os.path.join('config',config_filename+'.yaml'))# can delete the naive
 
-    mu_true, T_true, O_true,R_true=manual_initialization(H,
+    mu_true, T_true, O_true,R_true=init_manual(H,
                           stochastic_transition=stochastic_transition,
                           identity_emission=identity_emission,
                           peaky_reward=peaky_reward)
@@ -199,22 +138,24 @@ def test_with_naive_env(Alg:str,
 
     policy_learnt=main(Alg=Alg,
                        config_filename= config_filename,
+                        log_episode_filename= log_episode_filename,
+                       num_episodes=num_episodes,
                         model_true=model_true,
                         reward_true=reward_true,
                         model_load=None,
                         policy_load=None,
                         output_to_log_file=True,
-                        log_episode_filename= log_episode_filename,
                         prt_progress=False,
                         prt_policy_normalization=False,
-                        true_weight_output_parent_directory='real_env\\naive_real_id',      #'real_env\\naive_real'
-                        weight_output_parent_directory='learnt\\naive_id'                      #'learnt\\naive' 
+                        true_weight_output_parent_directory=os.path.join('real_env','naive_real_id'),      #'real_env/naive_real'
+                        weight_output_parent_directory=os.path.join('learnt','naive_id')                      #'learnt/naive' 
                         )
     
     # if we are training from naive params, also run this line:
     # Note: this only works for gamma=1. otherwise change
-    log_output_test_reward_pretty(H=H,K_end=1000,gamma=1.0, plot_optimal_policy=True, optimal_value=1/gamma*np.exp(gamma*H),
-                                  log_episode_file_name='log_episode_naive')
+    log_output_test_reward_pretty(H=H,K_end=num_episodes,gamma=1.0, plot_optimal_policy=True,
+                                  optimal_value=1/gamma*np.log(np.exp(gamma*H)),
+                                  log_episode_file_name=log_episode_filename)
 
     print('%'*100)
     print("short test of policy")
@@ -222,36 +163,36 @@ def test_with_naive_env(Alg:str,
     # print(policy_learnt)
 
 def naive_train_and_plot(Alg:str,
-                         K_end:int,
+                         num_episodes:int,
                          config_filename:str,
-                         log_episode_file_name:str,
+                         log_filename:str,
                          train_from_scratch,
                          stochastic_transition,
                           identity_emission,
                           peaky_reward:bool, 
                           instant_plot=False):
-    
-    nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param('config'+config_filename+'.yaml')
+    # print(f"@@@{config_filename}, {os.path.join('config',config_filename+'.yaml')}")
+    nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param(os.path.join("config",config_filename+'.yaml'))
 
     # train again on the naive dataset.
     if train_from_scratch:
-        test_with_naive_env(Alg,
-                            config_filename=config_filename,
-                            log_episode_filename=log_episode_file_name,
-                            stochastic_transition=stochastic_transition,
-                            identity_emission=identity_emission,
-                            peaky_reward=peaky_reward)
+        train_naive_env(Alg,
+                        num_episodes=num_episodes,
+                        config_filename=config_filename,
+                        log_episode_filename=log_filename,
+                        stochastic_transition=stochastic_transition,
+                        identity_emission=identity_emission,
+                        peaky_reward=peaky_reward)
 
     if instant_plot:
         optimal_value=1/gamma*np.log(np.exp(gamma*H))
-        log_file_directory='log\\'+log_episode_file_name+'.txt'
+        log_file_directory=os.path.join('./log',current_time_str(),log_filename+'.txt').replace('\\', '/')
 
         with open(log_file_directory,mode='r') as log_episode_file:
-            averge_risk_measure_of_each_episode=np.loadtxt(log_file_directory)[0:K_end+1,0]
+            averge_risk_measure_of_each_episode=np.loadtxt(log_file_directory)[0:num_episodes+1,0]
             '''
             Plot regret, suppose that we know the optimal value funciton.
             '''
-
             plot_type='regret'   # other options: 'risk_average', 'risk_each'
 
             risk_measure_smooth=np.cumsum(averge_risk_measure_of_each_episode)/(1+np.arange(len(averge_risk_measure_of_each_episode)))
@@ -286,315 +227,63 @@ def naive_train_and_plot(Alg:str,
                 plt.ylabel(f'Risk Measure of Each Episode')
         
             # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
-
             plt.legend(loc='upper right')
-
-            plt.savefig('plots/Reward'+current_time_str()+'.jpg')
+            plt.tight_layout()
+            plt.savefig(os.path.join('plots',current_time_str(),'single-Reward.jpg'))
 
             plt.show()
 
-def BVVI_plot(window_width_MDP:int,
-            window_width_POMDP:int,
-            config_filename='hyper_param_naive',
-            POMDP_log_filename='log_episode_naive',
-            MDP_log_filename='log_episode_naive_2',
-            K_end=1000):
-    # load hyper parameters
-    nS,nO,nA,H,K,nF,delta,gamma,iota =load_hyper_param('config\\'+config_filename+'.yaml')
-
-    # read POMDP file
-    log_file_directory='log\\'+POMDP_log_filename+'.txt'
-    with open(log_file_directory,mode='r') as log_episode_file:
-        POMDP_single_episode_rewards=np.loadtxt(log_file_directory)[0:K_end+1,0]    
-        log_episode_file.close()
-    # read MDP file
-    log_file_directory='log\\'+MDP_log_filename+'.txt'
-    with open(log_file_directory,mode='r') as log_episode_file:
-        MDP_single_episode_rewards=np.loadtxt(log_file_directory)[0:K_end+1,0]    
-        log_episode_file.close()    
-
-    # optimal values
-    # Todo:
-    optimal_value_POMDP=H*0.98 #*1.002  1/gamma*(np.exp(gamma*H)) 
-    # max(np.cumsum(POMDP_single_episode_rewards)/(1+np.arange(len(POMDP_single_episode_rewards))))
-    optimal_value_MDP=H   # 1/gamma*np.exp(gamma*H)*1.002
-
-    # Subplot 1: Episodic Return
-    # POMDP: episodic return
-    # plt.subplot(3,2,1)
-    POMDP_episodic_smooth=smooth(POMDP_single_episode_rewards, window_len=2,window='max_pooling')
-    POMDP_episodic_smooth=smooth(POMDP_episodic_smooth, window_len=3,window='hamming')
-    indices=np.arange(POMDP_episodic_smooth.shape[0])
-    plt.plot(indices,POMDP_episodic_smooth, c='cornflowerblue',  linestyle='dotted',
-             label='Partially Observable')
-    #plt.plot(np.arange(POMDP_single_episode_rewards.shape[0]),POMDP_single_episode_rewards, label='Partially Observable')
-
-    # MDP: episodic return
-    # plt.subplot(3,2,2)
-    MDP_episodic_smooth=smooth(MDP_single_episode_rewards, window_len=30,window='hamming')
-    indices=np.arange(MDP_episodic_smooth.shape[0])
-    plt.plot(indices,MDP_episodic_smooth, c='darkorange', label='Fully Observable')
-
-    # Optimal Policy
-    plt.axhline(y =optimal_value_MDP, color = 'red', linestyle = 'dashdot',
-                label='Optimal Policy') 
-    # MDP and POMDP
-    plt.ylim((min(min(POMDP_episodic_smooth),min(MDP_episodic_smooth))*0.95,
-              (max(max(POMDP_episodic_smooth),max(MDP_episodic_smooth)))*1.10))
-    plt.title(f'Episodic Return of BVVI')
-    plt.xlabel(f'Episode $k$')                             # H transitions per iteration.   Samples N (=iteration $K$ * {H})
-    plt.ylabel(f'Episodic Return')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
-    plt.legend(loc='upper right')
-    print(f"POMDP_max={max(POMDP_single_episode_rewards)}, smoothed max={max(POMDP_episodic_smooth)}")
-    print(f"MDP_max={max(MDP_single_episode_rewards)}, smoothed max={max(MDP_episodic_smooth)}")
-    print(f"Optimal Max={1/gamma*np.exp(gamma*H)}")
-    plt.savefig('plots/FinalReturn'+current_time_str()+'.jpg')
-    plt.show()
-
-    # Subplot 2: Regret
-    # plt.subplot(3,2,3)
-    plt.subplot(1,2,1)
-    # MDP: raw data
-    # plt.subplot(3,2,4)
-    MDP_regret=np.cumsum(optimal_value_MDP-MDP_single_episode_rewards)
-    indices=np.arange(MDP_regret.shape[0])
-    scatter_size=np.ones_like(indices)*1
-    plt.scatter(indices, MDP_regret,linestyle='dotted', c='orange', s=scatter_size,
-                label='Raw Data')    # plt.plot(indices, MDP_regret, label='Fully observable(Raw Data)')
-    
-    # # MDP: smoothing
-    # MDP_regret_smooth=smooth(MDP_regret, window_len=30,window='hamming')
-    # indices=np.arange(MDP_regret_smooth.shape[0])
-    # plt.plot(indices[40:], MDP_regret_smooth[40:], linestyle='dashed', label='Fully observable(Smoothed)')
-    # MDP: fitting
-    def square_rt(x,a,b,d):
-        return a*np.sqrt(b*x)+d
-    indices=np.arange(MDP_regret.shape[0])
-    fit_param, fit_curve = curve_fit(square_rt, indices, MDP_regret)
-    MDP_regret_fit=square_rt(indices, *fit_param)
-    plt.plot(indices, MDP_regret_fit,c='darkorange',
-             label=r'Fitted with ${O}\left(\sqrt{K}\right)$') #: a=%5.3f, b=%5.3f, d=%5.3f' % tuple(fit_param)
-    
-    # plot MDP regret
-    plt.ylim((min(min(MDP_regret),min(MDP_regret))*0.3,(max(max(MDP_regret),max(MDP_regret)))*1.2))
-    plt.title(f'Fully Observable Environment')
-    plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
-    plt.ylabel(f'Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
-    plt.legend(loc='upper right')
-    
-    plt.subplot(1,2,2)
-    # POMDP: raw data
-    optimal_value_POMDP=H*0.986 #max((POMDP_single_episode_rewards))*0.91
-    # 1/gamma*np.exp(gamma*H)*0.96
-    # max(np.cumsum(POMDP_single_episode_rewards)/(1+np.arange(len(POMDP_single_episode_rewards))))
-    POMDP_regret=np.cumsum(optimal_value_POMDP-POMDP_single_episode_rewards)
-    indices=np.arange(POMDP_regret.shape[0])
-    scatter_size=np.ones_like(indices)*0.02
-    plt.scatter(indices, POMDP_regret,linestyle='dotted', s=scatter_size,
-                label='Raw Data')    # plt.plot(indices, POMDP_regret, label='Partially Observable(Raw Data)')
-    # # POMDP: smoothing
-    # POMDP_regret_smooth=smooth(POMDP_regret, window_len=30,window='hamming')
-    # indices=np.arange(POMDP_regret_smooth.shape[0])
-    # plt.plot(indices[40:], POMDP_regret_smooth[40:], label='Partially Observable(Smoothed)')
-    # POMDP: fitting
-    def square_rt(x,a,b,d):
-        return a*np.sqrt(b*x)+d
-    indices=np.arange(POMDP_regret.shape[0])
-    fit_param, fit_curve = curve_fit(square_rt, indices, POMDP_regret)
-    POMDP_regret_fit=square_rt(indices, *fit_param)
-    # Plot POMDP Regret
-    plt.plot(indices, POMDP_regret_fit,c='royalblue',
-             label=r'Fitted with ${O}\left(\sqrt{K}\right)$') #: a=%5.3f, b=%5.3f, d=%5.3f' % tuple(fit_param)
-    plt.ylim((min(min(POMDP_regret),min(POMDP_regret))*0.3,(max(max(POMDP_regret),max(POMDP_regret)))*1.2))
-    plt.title(f'Partially Observable Environment')
-   
-    plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
-    plt.ylabel(f'Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
-    plt.legend(loc='upper right')
-    plt.suptitle('Regret of BVVI')
-    plt.savefig('plots/FinalRegret'+current_time_str()+'.jpg')
-    plt.show()
-    
-    # Subplot 3: PAC guantee
-    # MDP PAC
-    plt.subplot(1,2,1)
-    MDP_PAC_raw=np.cumsum(optimal_value_MDP-MDP_single_episode_rewards)/(1+np.arange(len(MDP_single_episode_rewards)))
-    indices=np.arange(MDP_PAC_raw.shape[0])
-    # plt.plot(indices, MDP_PAC_smooth,label='Fully Observable')
-    plt.semilogx(indices, MDP_PAC_raw,c='orange', linestyle='dotted',
-                 label='Raw Data')
-    # MDP fit
-    def inverse_sqrt(x,a,b,c,d):
-        return a*(1/np.sqrt(b*x+c))+d
-    indices=np.arange(MDP_PAC_raw.shape[0])
-    fit_param, fit_curve = curve_fit(inverse_sqrt, indices, MDP_PAC_raw)
-    MDP_PAC_fit=inverse_sqrt(indices, *fit_param)
-    plt.semilogx(indices, MDP_PAC_fit,c='darkorange', linestyle='solid', 
-                 label=r'Fitted with ${O}\left(\frac{1}{\sqrt{K}}\right)$')
-
-    #plot POMDP and MDP PAC
-    plt.xlim(1,1000)
-    plt.ylim((min(min(MDP_PAC_raw),min(MDP_PAC_raw))*0.4,(max(max(MDP_PAC_raw),max(MDP_PAC_raw)))*0.6))
-    plt.title(f'Fully Observable Environment')
-    plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
-    plt.ylabel(f'Average Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
-    plt.legend(loc='upper right')
-
-    plt.subplot(1,2,2)
-    # POMDP PAC raw
-    POMDP_PAC_raw=optimal_value_POMDP-np.cumsum(POMDP_single_episode_rewards)/(1+np.arange(len(POMDP_single_episode_rewards)))
-    indices=np.arange(POMDP_PAC_raw.shape[0])
-    # plt.plot(indices, POMDP_PAC_smooth,label='Partially Observable')
-    plt.semilogx(indices, POMDP_PAC_raw,linestyle='dotted',
-                 label='Raw Data')
-    # POMDP PAC fitting
-    def inverse_sqrt(x,a,b,c,d):
-        return a*(1/np.sqrt(b*x+c))+d
-    indices=np.arange(POMDP_PAC_raw.shape[0])
-    fit_param, fit_curve = curve_fit(inverse_sqrt, indices, POMDP_PAC_raw)
-    POMDP_PAC_fit=inverse_sqrt(indices, *fit_param)
-    plt.semilogx(indices, POMDP_PAC_fit,c='royalblue', linestyle='solid',
-                 label=r'Fitted with ${O}\left(\frac{1}{\sqrt{K}}\right)$')
-    # plot POMDP PAC
-    plt.xlim(1,1000)
-    plt.ylim((min(min(POMDP_PAC_raw),min(POMDP_PAC_raw))*0.4,(max(max(POMDP_PAC_raw),max(POMDP_PAC_raw)))*0.6))
-    plt.title(f'Partially Observable Environment')
-    plt.xlabel(f'Episode $k$')           # H transitions per iteration.   Samples N (=iteration $K$ * {H})
-    plt.ylabel(f'Average Regret')        # plt.ylabel( r'$\frac{1}{k}\sum_{t=1}^{k} \frac{1}{\gamma} \mathbb{E}^{\pi^k} \sum_{h=1}^H e^{\gamma r_h(S_h,A_h)}$')
-    plt.legend(loc='upper right')
-    plt.suptitle('PAC Guarantee of BVVI')
-    plt.savefig('plots/FinalPAC'+current_time_str()+'.jpg')
-    plt.show()
-    # raise ValueError(f"hellow")
-
-def train_plot_single(train_from_scratch:bool, plot_all:bool, K_end:int)->None:
+def train_single_risk(train_from_scratch:bool,
+                      config_filename:str,
+                      pomdp_log_filename:str,
+                      mdp_log_filename:str,
+                      plot_all:bool,
+                      num_episodes:int)->None:
     if train_from_scratch:
         naive_train_and_plot(Alg='BVVI',
-                             K_end=K_end,
-                         config_filename='hyper_param_naive_long',
+                             num_episodes=num_episodes,
+                         config_filename=config_filename,
                          train_from_scratch=True,
-                         log_episode_file_name='log_episode_naive_long_perturb_2000',
+                         log_filename=pomdp_log_filename,
                          stochastic_transition=True,
                          identity_emission=False,
                          peaky_reward=False)
     
         naive_train_and_plot(Alg='BVVI',
-                             K_end=K_end,
-                         config_filename='hyper_param_naive_long',
+                             num_episodes=num_episodes,
+                         config_filename=config_filename,
                          train_from_scratch=True,
-                         log_episode_file_name='log_episode_naive_long_id_2000',
+                         log_filename=mdp_log_filename,
                          stochastic_transition=True,
                          identity_emission=True,
                          peaky_reward=False)
     if plot_all:
-        BVVI_plot(window_width_MDP=3,
+        BVVI_plot(num_episodes=num_episodes, 
+                    window_width_MDP=3,
                      window_width_POMDP=30,
-                     config_filename='hyper_param_naive_long',
-                    POMDP_log_filename='log_episode_naive_long_perturb_2000',
-                    MDP_log_filename='log_episode_naive_long_id_2000',
-                    K_end=K_end
-                )
-        
-def multi_risk_level_plot(window_width_POMDP:int,
-                          config_files:list,
-                          POMDP_log_files:list,
-                          K_end:int):
-    # read risk_params
-    num_params=len(config_files)
-    print(f"num_params={num_params}")
-    risk_params=np.zeros([num_params])
-    for i in range(num_params):
-        with open('config\\'+config_files[0]+'.yaml', 'r') as file:
-            nS,nO,nA,H,K,nF,delta,risk_params[i],iota =load_hyper_param('config\\'+config_files[i]+'.yaml')
-        file.close()
-    print(f"Risk Params={risk_params}")
+                     config_filename=config_filename,
+                    POMDP_log_filename=pomdp_log_filename,
+                    MDP_log_filename=mdp_log_filename)
 
-    # read episodic rewards
-    episodic_rewards=np.zeros([K, num_params])
-    print(f"shape of container=={episodic_rewards.shape}")
-    for i in range(num_params):
-        log_file_directory='log'+POMDP_log_files[i]+'.txt'
-        print(f"will read file from {log_file_directory}")
-        with open(log_file_directory, 'r') as file:
-            a=np.loadtxt(log_file_directory)[:,0]
-            print(f"{a.shape}")
-            episodic_rewards[:,i]=np.loadtxt(log_file_directory)[:,0]
-            print(f"{episodic_rewards.shape}")
-            file.close()
-    
-    # save various output of risk level into a single file
-    np.savetxt('log\\Various_Risk\\Risk_Level_All.txt', episodic_rewards)
 
-    # signal processing of the episodic rewards.
-
-    # smooth the raw data.
-    from func import POMDP_smooth, POMDP_PAC, POMDP_regret
-    
-    optimal_values=[None,H*0.96, H*0.97,  H*0.975, H*0.98, H, H]
-    '''
-    i=0
-    i=1:     H*0.96
-    i=2:     H*0.97
-    i=3:     H*0.975
-    i=4:     H*0.98
-    i=5:     H
-    i=6:     H
-    '''
-
-    '''
-    # plot Regrets
-    indices, regret,regret_fit, scatter_size=POMDP_regret(optimal_value_POMDP,smoothed)
-    plt.scatter(indices, regret,linestyle='dotted', s=scatter_size,
-        label='Raw Data')
-    plt.plot(indices,regret_fit)
-    plt.show()
-    '''
-    
-    # plot PACs
-    label_text=['' for _ in range(num_params*2)]
-    label_color=['red', 'darkorange', 'gold', 'skyblue', 'green', 'blue', 'purple']
-    for i in range(1,num_params,1):
-        '''
-        print(f"Max episodic reward of {i}=={max(episodic_rewards[:,i])}")
-        print(f"{max(np.cumsum(episodic_rewards[:,i])/(1+np.arange(len(episodic_rewards[:,i]))))}")
-        '''
-        label_text[i*2]=r'$\gamma$='+f'{risk_params[i]}'
-
-        optimal_value_POMDP=optimal_values[i]
-
-        # smoothed curves
-        raw=episodic_rewards[:,i]
-        smoothed_id, smoothed=POMDP_smooth(raw)
-        # plt.plot(indicies,smoothed)
-        # plt.show()
-
-        # PAC
-        indices, PAC, PAC_fit=POMDP_PAC(optimal_value_POMDP,smoothed)
-        ax = plt.gca()
-        smooth_PAC_id, smooth_PAC=POMDP_smooth(PAC)
-        plt.scatter(smooth_PAC_id, smooth_PAC,c=label_color[i],alpha=0.3, s=np.ones_like(smooth_PAC_id))
-        plt.xscale('log')
-
-        plt.semilogx(indices, PAC_fit,linestyle='solid',c=label_color[i], label=label_text[i*2])
-    plt.xlim(10,1000)
-    plt.title(f'PAC Guarantee of BVVI\nUnder Different Risk Sensitivity '+r' $\gamma$')
-    plt.xlabel('Episode Number k')
-    plt.ylabel('Average Regret')
-    plt.legend(loc='upper right')
-    # plt.savefig('plots/Various_Risk_PAC'+current_time_str()+'.jpg')
-    plt.show()
-
-def train_multiple_risk(train_from_scratch, plot_all, K_end):
-    gamma_range=[ -5.0,-3.0, -1.0, 0.03, 1.0, 3.0, 5.0]
-    config_files=[f'\\Various_Risk\\gamma={gamma}' for gamma in gamma_range]
-    log_files=[f'\\Various_Risk\\gamma={gamma}' for gamma in gamma_range]
+def train_multiple_risk(train_from_scratch, plot_all, num_episodes, gamma_range=[ -5.0,-3.0, -1.0, 0.01, 1.0, 3.0, 5.0]):
+    """
+    Use the config files from ./config/current_time/various_risk/gamma=... 
+    to train the BVVI algorithm.
+    Then output log information to  ./log/current_time/various_risk/gamma=... 
+    """
+    config_files=[ _ for _ in range(len(gamma_range))]
+    log_files=config_files 
+    for i,gamma in enumerate(gamma_range):
+        config_files[i]=os.path.join("various_risk",f"gamma={gamma}")
+        log_files[i]=os.path.join("various_risk",f"gamma={gamma}")
     if train_from_scratch:
         for i in range(len(gamma_range)):
             naive_train_and_plot(Alg='BVVI',
-                                K_end=K_end,
+                                num_episodes=num_episodes,
                                 config_filename=config_files[i],
                                 train_from_scratch=True,
-                                log_episode_file_name=log_files[i],
+                                log_filename=log_files[i],
                                 stochastic_transition=True,
                                 identity_emission=False,
                                 peaky_reward=False)
@@ -602,14 +291,116 @@ def train_multiple_risk(train_from_scratch, plot_all, K_end):
         multi_risk_level_plot(window_width_POMDP=30,
                                 config_files=config_files,
                                 POMDP_log_files=log_files,
-                                K_end=K_end)
-
+                                num_episodes=num_episodes)
 
 if __name__ == "__main__":
-    train_from_scratch=False #True 
+    """
+    Run this command in console(only specify those arguments different from their default values):
+    
+    python main.py --train_single False --gamma_range -1.0 0.01 1.0 3.0 5.0
+    
+    or this line:
+    
+    > python main.py --gamma_range -5.0 -3.0 -1.0 0.01 1.0 3.0 5.0 
+    
+    or this line to avoid keyborad interrupt:
+    
+    > nohup python main.py --train_single False --gamma_range -1.0 0.01 1.0 3.0 5.0 &
+    > nohup python main.py --train_single False --gamma_range -3.0 &
+    after using nohup command, you can run 
+    
+    > job
+    
+    in the terminal to see whether your code is still running, even after you trun off the terminal console.
+    """
+    
+    """
+    train_from_scratch=True 
     plot_all=True
-    K_end=1000                  #2000
+    num_episodes=2000
+    gamma_range=[ -5.0,-3.0, -1.0, 0.01, 1.0, 3.0, 5.0]
+    config_filename='naive' #'naive-medium'
+    log_filename_pomdp='pomdp'
+    log_filename_mdp='mdp'
+    """
 
-    # train_plot_single(train_from_scratch, plot_all, K_end)
+    def str2bool(v):
+        if isinstance(v, bool):
+            return v
+        if v.lower() in ('yes', 'true', 't', 'y', '1'):
+            return True
+        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+            return False
+        else:
+            raise argparse.ArgumentTypeError('Boolean value expected.')
+    # Initialize the parser
+    parser = argparse.ArgumentParser(description="Example of using argparse in Python")
+    # Add arguments
+    parser.add_argument('--plot_all', type=str2bool, nargs='?', const=True, default=True, help='Flag to plot all figures')
+    parser.add_argument('--train_from_scratch', type=str2bool, nargs='?', const=True, default=True, help='Flag to train the model from scratch')
+    parser.add_argument('--train_single', type=str2bool, nargs='?', const=True, default=True, help=r'Flag to train single risk measure $\gamma=1.0$')
+    parser.add_argument('--train_various', type=str2bool, nargs='?', const=True, default=True,
+                        help=r'Flag to train under multiple risk measure specified by gamma_range')
+    parser.add_argument('--num_episodes', type=int, default=2000, help='Number of episodes for training')
+    parser.add_argument('--gamma_range', nargs='+', type=float, default=[-5.0, -3.0, -1.0, 0.01, 1.0, 3.0, 5.0], help='Range of gamma values')
+    parser.add_argument('--config_filename', type=str, default='naive', help='Configuration filename')
+    parser.add_argument('--log_filename_pomdp', type=str, default='pomdp', help='Log filename for POMDP')
+    parser.add_argument('--log_filename_mdp', type=str, default='mdp', help='Log filename for MDP')
+    # Parse the arguments
+    args = parser.parse_args()
+    # Access arguments
+    train_from_scratch = args.train_from_scratch
+    train_single= args.train_single
+    train_various= args.train_various
+    plot_all = args.plot_all
+    num_episodes = args.num_episodes
+    gamma_range = args.gamma_range
+    config_filename = args.config_filename
+    log_filename_pomdp = args.log_filename_pomdp
+    log_filename_mdp = args.log_filename_mdp
+    # Print the values (for demonstration)
+    print(f'Received the following parameters from console:')
+    print(f'\ttrain_from_scratch: {train_from_scratch}')
+    print(f'\ttrain_single: {train_single}')
+    print(f'\ttrain_various: {train_various}')
+    print(f'\tplot_all: {plot_all}')
+    print(f'\tnum_episodes: {num_episodes}')
+    print(f'\tgamma_range: {gamma_range}')
+    print(f'\tconfig_filename: {config_filename}')
+    print(f'\tlog_filename_pomdp: {log_filename_pomdp}')
+    print(f'\tlog_filename_mdp: {log_filename_mdp}')  
 
-    train_multiple_risk(train_from_scratch, plot_all, K_end)
+    make_all_dirs()
+    
+    if train_single:
+        train_single_risk(train_from_scratch=train_from_scratch,
+                          plot_all=plot_all,
+                          num_episodes=num_episodes,
+                          config_filename=config_filename,
+                          pomdp_log_filename=log_filename_pomdp,
+                          mdp_log_filename=log_filename_mdp)
+    
+    if train_various:
+        train_multiple_risk(train_from_scratch=train_from_scratch,
+                            plot_all=plot_all,
+                            num_episodes=num_episodes,
+                            gamma_range=gamma_range)
+    
+    plot_pac(config_filename=config_filename,
+                  POMDP_log_filename=log_filename_pomdp,
+                  MDP_log_filename=log_filename_mdp,
+                  K_end=num_episodes)
+    
+    plot_regret(window_width_MDP=3,
+                     window_width_POMDP=30,
+                     config_filename=config_filename,
+                    POMDP_log_filename=log_filename_pomdp,
+                    MDP_log_filename=log_filename_mdp,
+                    K_end=num_episodes)
+    
+    plot_cum_reward(config_filename=config_filename,
+             POMDP_log_filename=log_filename_pomdp,
+             MDP_log_filename=log_filename_mdp,
+             K_end=num_episodes)
+    
+    plot_cum_reward_various_risk(gamma_range=gamma_range,num_episodes=num_episodes)

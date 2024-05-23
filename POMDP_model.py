@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import yaml
-from func import save_model_rewards,load_hyper_param, test_model_normalized, test_policy_normalized
+from utils import save_model_rewards,load_hyper_param, test_model_normalized, test_policy_normalized
 
 def get_random_dist(dim:int,dist_type:str)->np.array:
     '''
@@ -24,7 +24,10 @@ def sample_from(dist, open_debug=False)->int:
     if open_debug:
         print(f"sample from dist={dist}")
         print(f"sum={sum(dist)}")
-    return int(np.random.choice(a=list(np.arange(len(dist))), size=1, p=(dist)))
+    # numpy version:
+    # int(np.random.choice(a=list(np.arange(len(dist))), size=1, p=(dist)))
+    # torch version:
+    return torch.multinomial(dist.float(), 1, replacement=True).item()
 
 def initialize_reward(nS:int, nA:int, H:int, init_type:str)->torch.Tensor:
     '''
@@ -77,9 +80,7 @@ def initialize_model(nS:int,nO:int,nA:int,horizon:int,init_type:str)->tuple:
         O : torch.Size([horizon+1,nO,nS])
     remark
         The distributions are initialized as a randomly picked distribution, with the only constraint is that the distribution add up to 1.00
-    '''
 
-    '''
     initial distribution
     name: init_dist
     shape: torch.Size([nS])
@@ -218,12 +219,17 @@ def sample_trajectory(horizon:int, policy, model, reward, output_reward=False):
         sample a trajectory from a policy and a POMDP model with given horizon length.
         we will not sample the last action which is in fact out of horizon. AH+1 or a[H] will be denoted as -1.
     '''
+    
+    device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    #policy=[item.cpu() for item in policy]
+    #model=[item.cpu() for item in model]
+    #reward=[item.cpu() for item in reward]
+    
+    init_dist, trans_kernel, emit_kernel =model
 
-    init_dist, trans_kernel, emit_kernel =model 
-
-    full_traj=np.ones((3,horizon+1), dtype=int)*(-1)   
+    full_traj=-torch.ones((3,horizon+1), dtype=int).to(device)
     if output_reward:
-        sampled_reward=np.ones(horizon, dtype=np.float64)*(-1)
+        sampled_reward=-torch.ones((horizon,), dtype=torch.float64).to(device)
 
     # S_0
     full_traj[0][0]=sample_from(init_dist)

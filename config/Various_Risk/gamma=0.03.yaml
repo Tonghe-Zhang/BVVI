@@ -1,8 +1,0 @@
-sizes:
-  size_of_action_space: 2
-  size_of_state_space: 3
-  size_of_observation_space: 3
-  horizon_len: 4
-  num_episode: 1000
-  confidence_level: 0.2
-  risk_sensitivity_factor: 0.03

@@ -9,13 +9,14 @@ from tqdm import tqdm
 
 from POMDP_model import initialize_model_reward, initialize_model, initialize_policy, sample_trajectory, get_random_dist, sample_from
 
-from func import negative_func, positive_func, log_output_param_error, log_output_tested_rewards, log_output_test_reward_pretty, load_hyper_param, init_value_representation, init_history_space, init_occurrence_counters
+from utils import negative_func, positive_func, log_output_param_error, log_output_tested_rewards, log_output_test_reward_pretty, load_hyper_param, init_value_representation, init_history_space, init_occurrence_counters
 
-from func import test_policy_normalized, test_output_log_file, current_time_str, Logger, short_test
+from utils import test_policy_normalized, test_output_log_file, current_time_str, Logger, short_test
 
-from func import save_model_rewards, load_model_rewards, save_model_policy, load_model_policy, test_normalization_O,test_normalization_T
+from utils import save_model_rewards, load_model_rewards, save_model_policy, load_model_policy, test_normalization_O,test_normalization_T
 
 def BVVI(hyper_param:tuple,
+         num_episodes:int,
          model_true:tuple,
          reward_true:torch.Tensor,
          model_load:tuple,
@@ -38,15 +39,26 @@ def BVVI(hyper_param:tuple,
     output: ternary tensor tuple 
         (policy_learnt, model_learnt, evaluation_results)
     '''
-
+    
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+    
     if model_true==None:
         raise(ValueError)
+    # move true model to gpu.
+    model_true=tuple(tensor.to(device) for tensor in model_true)
+    
     if reward_true==None:
         raise(ValueError)
-
+    reward_true.to(device)
+    
     # unpack hyper parameters
     nS,nO,nA,H,K,nF,delta,gamma,iota =hyper_param
-
+    # we can change number of episodes K from the console.
+    K=num_episodes
+    
     # used only during sampling.
     mu_true,T_true,O_true=model_true
     # save the true models and rewards used in this experiment.
@@ -62,35 +74,47 @@ def BVVI(hyper_param:tuple,
     '''
     if model_load==None:
         # train kernels from scratch. Initialize the empirical kernels with uniform distributions.
-        mu_hat, T_hat, O_hat=initialize_model(nS,nO,nA,H,init_type='uniform')
-    else:
-        mu_hat, T_hat, O_hat=model_load
+        model_load=initialize_model(nS,nO,nA,H,init_type='uniform')
+    # move model_load to gpus.
+    model_load=tuple(tensor.to(device) for tensor in model_load)
+    mu_hat, T_hat, O_hat=model_load
+    
     if policy_load==None:
         # train polcy from scratch. Initialize the policy
         policy_learnt=initialize_policy(nO,nA,H)
     else:
         policy_learnt=policy_load
+    
+    # move to gpus.
+    policy_learnt=[item.to(device) for item in policy_learnt]
 
     if prt_policy_normalization:
         print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_policy_normalized(policy_test=policy_learnt,size_act=nA,size_obs=nO)}")
 
     # Bonus residues, correspond to \mathsf{t}_h^k(\cdot,\cdot)  and  \mathsf{o}_{h+1}^k(s_{h+1})
-    bonus_res_t=torch.ones([H,nS,nA]).to(torch.float64)
-    bonus_res_o=torch.ones([H+1,nS]).to(torch.float64)   # in fact there is no h=0 for residue o. we shift everything right.
+    bonus_res_t=torch.ones([H,nS,nA]).to(torch.float64).to(device)
+    bonus_res_o=torch.ones([H+1,nS]).to(torch.float64).to(device)   # in fact there is no h=0 for residue o. we shift everything right.
 
     # Bonus
     ''''we should be aware that in the implementation, s_{H+1} is set to be absorbed to 0 so T(s_{H+1}|s_H) = \delta(S_{H+1}=0) and o_{H+1}^k(s_{H+1})= 1 if s_{H+1} \ne 0   else 3\sqrt{\frac{OH \iota}{k}} 
     so bonus_{H} is needs special care. '''
-    bonus=torch.ones([H,nS,nA]).to(torch.float64)
+    bonus=torch.ones([H,nS,nA]).to(torch.float64).to(device)
 
     # create the history spaces \{\mathcal{F}_h\}_{h=1}^{H}
     history_space=init_history_space(H,nO,nA)
 
     # initialize empirical risk beliefs, beta vectors, Q-functions and value functions
     sigma_hat, beta_hat, Q_function, value_function=init_value_representation(H,nS, nO, nA)
+    # move to gpus
+    sigma_hat=[item.to(device) for item in sigma_hat]
+    beta_hat=[item.to(device) for item in beta_hat]
+    Q_function=[item.to(device) for item in Q_function]
+    value_function=[item.to(device) for item in value_function]
 
     # initialize the (s,o,a) occurrence counters
-    Ns_init, Nssa, Nssa_ones, Nsa, Nos, Nos_ones, Ns =init_occurrence_counters(H,nS,nO,nA)
+    counters=init_occurrence_counters(H,nS,nO,nA)
+    counters=tuple(cnt.to(device) for cnt in counters)        
+    Ns_init, Nssa, Nssa_ones, Nsa, Nos, Nos_ones, Ns=counters
     
     # %%%%%% Start of training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     for k in tqdm(range(K)):
@@ -119,16 +143,16 @@ def BVVI(hyper_param:tuple,
                 sigma_hat[h][hist]=np.float64(nO)*\
                     torch.diag(O_hat[h][obs,:]).to(dtype=torch.float64)\
                         @ T_hat[h-1,:,:,act].to(dtype=torch.float64)  \
-                            @  torch.diag(torch.exp(gamma* reward_true[h-1,:,act])).to(dtype=torch.float64) \
+                            @  torch.diag(torch.exp(gamma* reward_true[h-1,:,act])).to(dtype=torch.float64).to(device) \
                                 @ sigma_hat[h-1][prev_hist].to(dtype=torch.float64)
         # line 11 of the original paper
-        bonus_res_t=torch.min(torch.ones([H,nS,nA]), 3*torch.sqrt(nS*H*iota / Nsa))
-        bonus_res_o=torch.min(torch.ones([H+1,nS]), 3*torch.sqrt(nO*H*iota/Ns))
+        bonus_res_t=torch.min(torch.ones([H,nS,nA]).to(device), 3*torch.sqrt(nS*H*iota / Nsa)).to(device)
+        bonus_res_o=torch.min(torch.ones([H+1,nS]).to(device), 3*torch.sqrt(nO*H*iota/Ns)).to(device)
         
         # line 12 of the original paper. Notice that h starts from 0 in pytorch it's different from the original paper.
         for h in range(H):
             bonus[h]=np.fabs(np.exp(gamma*(H-h))-1)*\
-                torch.min(torch.ones([nS,nA]), \
+                torch.min(torch.ones([nS,nA]).to(device), \
                     bonus_res_t[h]+torch.tensordot(bonus_res_o[h+1].to(torch.float64), T_hat[h].to(torch.float64), dims=1))
         if prt_progress:
             print(f"\t\t belief propagation ends...") 
@@ -137,7 +161,7 @@ def BVVI(hyper_param:tuple,
         if prt_progress:
             print(f"\t\t dynamic programming starts...")
         # re-initialize
-        beta_hat=[torch.ones_like(sigma_hat[h]) for h in range(H+1)] 
+        beta_hat=[torch.ones_like(sigma_hat[h]).to(device) for h in range(H+1)] 
         for q_func in Q_function:
             q_func.zero_()
         for v_func in value_function:
@@ -158,7 +182,7 @@ def BVVI(hyper_param:tuple,
                 for act in range(nA):         # here action represents a_h, here obs is for o_{h+1}
                     # line 19 in the original paper.
                     Q_function[h][hist][act]=\
-                        gamma* np.log(1/nO * \
+                        gamma* torch.log(1e-7+1/nO * \
                                     sum([torch.inner(sigma_hat[h+1][(hist)+(act,obs)] , beta_hat[h+1][(hist)+(act,obs)]) for obs in range(nO)] ))
             
             # line 22 in the original paper.
@@ -170,9 +194,9 @@ def BVVI(hyper_param:tuple,
             # select greedy action for the policy. The policy is one-hot in the last dimension.
             if prt_progress:
                 print(f"\t\t\t update greedy policy...")
-            max_indices=torch.argmax(Q_function[h],dim=-1,keepdim=True)   # good thing about argmax: only return 1 value when there are multiple maxes. 
+            max_indices=torch.argmax(Q_function[h],dim=-1,keepdim=True).to(device)   # good thing about argmax: only return 1 value when there are multiple maxes. 
             policy_shape=policy_learnt[h].shape
-            policy_learnt[h]=torch.zeros(policy_shape).scatter(dim=-1,index=max_indices,src=torch.ones(policy_shape))
+            policy_learnt[h]=torch.zeros(policy_shape).to(device).scatter(dim=-1,index=max_indices,src=torch.ones(policy_shape).to(device))
             if prt_policy_normalization:
                 print(f"\t\t\t\tPOLICY NORMALIZATION TEST:{test_policy_normalized(policy_test=policy_learnt,size_act=nA,size_obs=nO)}")
 
@@ -195,9 +219,9 @@ def BVVI(hyper_param:tuple,
                 # line 24: Control the range of beta vector
                 gamma_plus=positive_func(gamma)
                 gamma_minus=negative_func(gamma)
-                beta_hat[h][hist][state]=np.clip(beta_hat[h][hist][state], \
-                                                np.exp(gamma_minus*(H-h)), \
-                                                    np.exp(gamma_plus*(H-h)))
+                beta_hat[h][hist][state]=torch.clamp(beta_hat[h][hist][state], \
+                                                torch.exp(torch.tensor(gamma_minus*(H-h))), \
+                                                    torch.exp(torch.tensor(gamma_plus*(H-h))))
             if prt_progress:
                 print(f"\t\t\t Horizon remains: {h}/{H}")
 
@@ -236,7 +260,7 @@ def BVVI(hyper_param:tuple,
                     #print(f"sum(T_hat[h][:,s,a])==0{sum(T_hat[h][:,s,a])==0}")
                     normalize_sum=sum(T_hat[h][:,s,a])
                     if normalize_sum==0:
-                        T_hat[h][:,s,a]=torch.ones_like(T_hat[h][:,s,a])/nS 
+                        T_hat[h][:,s,a]=torch.ones_like(T_hat[h][:,s,a]).to(device)/nS 
                     else:
                         T_hat[h][:,s,a]=T_hat[h][:,s,a]/normalize_sum
                     #print(f"After: T_hat[{h}][:,{s},{a}]= { T_hat[h][:,s,a]}")
@@ -252,7 +276,7 @@ def BVVI(hyper_param:tuple,
                 #print(f"O_hat[{h}][:,{s}]={O_hat[h][:,s]}, sum=={sum(O_hat[h][:,s])}")
                 normalize_sum=sum(O_hat[h][:,s])
                 if normalize_sum==0:
-                    O_hat[h][:,s]=torch.ones_like(O_hat[h][:,s])/nO
+                    O_hat[h][:,s]=torch.ones_like(O_hat[h][:,s]).to(device)/nO
                     #print(f"is zero,  change to {O_hat[h][:,s]}")
                 else:
                     O_hat[h][:,s]=O_hat[h][:,s]/normalize_sum
@@ -265,9 +289,9 @@ def BVVI(hyper_param:tuple,
         ''''
         tested_return = \frac{1}{\gamm} \mathbb{E}^{\widehat{\pi}^k} e^{\gamma \sum_{h=1}^H r_h(s_h,a_h)} 
         '''
-        num_samples=7
+        num_samples=20
         # Fixed a small mistake: forgot to use np.log()
-        tested_risk_measure[k]=(1/gamma)*np.log(np.array([np.exp(gamma*sum(sample_trajectory(H,policy_learnt,model_true,reward_true,output_reward=True))) for _ in range(num_samples)]).mean())
+        tested_risk_measure[k]=(1/gamma)*torch.log(1e-7+torch.tensor([torch.exp(gamma*sum(sample_trajectory(H,policy_learnt,model_true,reward_true,output_reward=True))) for _ in range(num_samples)]).mean())
         # [Evaluation] compute the average Frobenius error between the true and learnt parameters until this iter.
         mu_err[k]=torch.linalg.norm(mu_true-mu_hat)/mu_true.numel()
         T_err[k]=torch.linalg.norm(T_true-T_hat)/T_true.numel()
@@ -284,7 +308,7 @@ def BVVI(hyper_param:tuple,
             print(f"\tSuccessfuly saved the newest kernels and policies to folder: {'./learnt'}")
     # %%%%%% End of training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if prt_progress:
-        print(f"End of training. number of iters K={K}")
+        print(f"End of training. Number of iters K={K}")
     model_learnt=(mu_hat, T_hat, O_hat)
     evaluation_results=(mu_err,T_err,O_err,tested_risk_measure)
     return (policy_learnt, model_learnt, evaluation_results)
